@@ -30,7 +30,7 @@
       background-attachment: fixed;
     }
 
-    /* Burbujas decorativas Frutiger Aero */
+    /* Burbujas Frutiger Aero */
     .bubbles { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
     .bubbles i {
       position: absolute; border-radius: 50%;
@@ -46,7 +46,7 @@
 
     .app { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 16px; }
 
-    /* Efecto Vidrio / Aero Glass */
+    /* Glassmorphism */
     .glass {
       background: linear-gradient(180deg, rgba(255,255,255,.88), rgba(205,239,255,.68));
       border: 1.5px solid rgba(255,255,255,.95);
@@ -56,7 +56,6 @@
       backdrop-filter: blur(10px);
     }
 
-    /* Cabecera */
     .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; margin-bottom: 16px; }
     .brand { display: flex; align-items: center; gap: 12px; }
     .orb {
@@ -79,23 +78,21 @@
     .pill.stale .dot { background: var(--warn); box-shadow: 0 0 0 3px rgba(240,163,10,.28); }
     .pill.off .dot { background: var(--bad); box-shadow: 0 0 0 3px rgba(229,72,77,.25); }
 
-    /* Distribución */
-    .layout { display: grid; grid-template-columns: 1fr 380px; gap: 16px; height: calc(100vh - 118px); min-height: 540px; }
+    .layout { display: grid; grid-template-columns: 1fr 350px; gap: 16px; height: calc(100vh - 118px); min-height: 540px; }
     .mapwrap { position: relative; overflow: hidden; padding: 6px; }
     #map { width: 100%; height: 100%; border-radius: 15px; background: #cfeaf7; }
 
-    /* Botones flotantes interactivos */
+    /* Botones flotantes corregidos */
     .mapbtns { position: absolute; right: 18px; top: 18px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
 
     .side { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding: 2px; min-height: 0; }
     .card { padding: 16px 18px; }
     h2 { margin: 0 0 10px; font-size: .95rem; text-transform: uppercase; letter-spacing: .8px; color: var(--soft); }
 
-    /* Botones tipo gel frutiger aero */
     .btn {
       position: relative; overflow: hidden; cursor: pointer;
-      padding: 9px 16px; min-width: 135px; border-radius: 999px;
-      border: 1.5px solid #fff; color: #fff; font: 600.82rem "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+      padding: 10px 20px; min-width: 135px; border-radius: 999px;
+      border: 1.5px solid #fff; color: #fff; font: 600 .85rem "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
       text-shadow: 0 1px 2px rgba(0,74,115,.6);
       background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom));
       box-shadow: 0 4px 10px rgba(20,100,150,.35), inset 0 -2px 4px rgba(0,60,110,.2);
@@ -108,33 +105,28 @@
     }
     .btn.green { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); text-shadow: 0 1px 2px rgba(36,107,20,.6); }
     .btn.off { background: linear-gradient(180deg, #d9e6ee, #9db4c2); text-shadow: 0 1px 2px rgba(40,70,90,.5); }
-    .btn.danger { background: linear-gradient(180deg, #ff8080, #e5484d); text-shadow: 0 1px 2px rgba(100,20,20,.6); }
     .btn:hover { filter: brightness(1.06); }
     .btn:active { transform: translateY(1px); filter: brightness(.95); }
-    .btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px var(--blue-bottom); }
 
-    /* Datos */
     dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; }
     dt { color: var(--soft); font-size: .85rem; }
     dd { margin: 0; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
     .list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
     .list li {
-      display: flex; flex-direction: column; gap: 6px;
-      padding: 10px 12px; border-radius: 14px; font-size: .85rem;
-      background: rgba(255,255,255,.75); border: 1.5px solid rgba(255,255,255,.95);
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 9px 12px; border-radius: 14px; font-size: .88rem; cursor: pointer;
+      background: rgba(255,255,255,.7); border: 1.5px solid rgba(255,255,255,.95);
     }
-    .list-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .list-actions { display: flex; gap: 6px; margin-top: 4px; }
+    .list li:hover { background: rgba(255,255,255,.9); }
     .list .name { font-weight: 700; overflow-wrap: anywhere; }
     .list .meta { display: block; font-weight: 400; font-size: .75rem; color: var(--soft); }
-    .list .empty { justify-content: center; color: var(--soft); }
+    .list .empty { justify-content: center; color: var(--soft); cursor: default; }
     .chip { flex: none; padding: 3px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
     .chip.in { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); }
     .chip.out { background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom)); }
     .status-line { font-weight: 700; }
 
-    /* Marcador y animaciones */
     .pin { position: relative; width: 28px; height: 28px; }
     .pin span {
       position: absolute; inset: 4px; border-radius: 50%;
@@ -151,7 +143,6 @@
       background: rgba(255,255,255,.92); border: 1px solid #fff; border-radius: 10px;
       color: var(--deep); font-weight: 700; box-shadow: 0 2px 8px rgba(20,100,150,.3);
     }
-    .leaflet-container a { color: var(--blue-bottom); }
 
     footer { text-align: center; font-size: .75rem; color: var(--soft); margin-top: 14px; }
 
@@ -172,7 +163,7 @@
       <span class="orb" aria-hidden="true"></span>
       <div>
         <h1>Geocorez</h1>
-        <p>Control Total Web (Modo Manual, Círculos, Dibujo y Edición)</p>
+        <p>Mapa en tiempo real</p>
       </div>
     </div>
     <div class="pill" id="conn" role="status" aria-live="polite">
@@ -182,15 +173,15 @@
 
   <main class="layout">
     <section class="glass mapwrap">
-      <div id="map" role="application" aria-label="Mapa con la ubicación en tiempo real"></div>
+      <div id="map" role="application" aria-label="Mapa en tiempo real"></div>
 
-      <!-- Botones de Control Completo -->
+      <!-- Botones flotantes -->
       <div class="mapbtns">
-        <button class="btn" id="btnFollow" type="button">Seguir: Activo</button>
         <button class="btn" id="btnCenter" type="button">Centrar</button>
         <button class="btn green" id="btnMode" type="button">Modo: GPS</button>
-        <button class="btn green" id="btnCircle" type="button">+ Círculo aquí</button>
+        <button class="btn green" id="btnCircle" type="button">+ Círculo</button>
         <button class="btn green" id="btnDraw" type="button">Dibujar zona</button>
+        <button class="btn" id="btnGeofences" type="button">Geocercas</button>
       </div>
     </section>
 
@@ -206,7 +197,7 @@
       </section>
 
       <section class="glass card">
-        <h2>Geocercas (Gestión Web)</h2>
+        <h2>Geocercas</h2>
         <div class="status-line" id="fenceStatus">Sin datos todavía</div>
         <ul class="list" id="fenceList"></ul>
       </section>
@@ -218,10 +209,9 @@
     </aside>
   </main>
 
-  <footer>Geocorez · Sincronización Total Web & Móvil con Mapbox y Firebase</footer>
+  <footer>Geocorez · Seguimiento en tiempo real con Mapbox y Firebase</footer>
 </div>
 
-<noscript>Esta página necesita JavaScript para mostrar el mapa.</noscript>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
   (function () {
@@ -239,13 +229,14 @@
 
     var map = L.map('map').setView([-16.5, -68.15], 13);
 
-    var MAPBOX_TOKEN = 'pk.eyJ1IjoieW9zaGljb3JlIiwiYSI6ImNtd2NvcTFobTA0bW4zMG85cG9mc2E2cWwifQ.L6gUJs7fyQ_ewHSXad6TLw'; // Reemplaza por tu token real
+    // Reemplaza por tu token público de Mapbox autorizado
+    var MAPBOX_TOKEN = 'pk.eyJ1IjoieW9zaGljb3JlIiwiYSI6ImNtd2NvcTFobTA0bW4zMG85cG9mc2E2cWwifQ.L6gUJs7fyQ_ewHSXad6TLw';
 
     L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}{r}?access_token=' + MAPBOX_TOKEN, {
       tileSize: 512,
       zoomOffset: -1,
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.mapbox.com/">Mapbox</a>'
+      attribution: '&copy; Mapbox'
     }).addTo(map);
 
     var pinIcon = L.divIcon({
@@ -284,61 +275,50 @@
       }).then(function (r) { return r.json(); });
     }
 
-    function num(v) {
-      var n = Number(v);
-      return isFinite(n) ? n : null;
-    }
+    function num(v) { var n = Number(v); return isFinite(n) ? n : null; }
 
     function el(tag, cls, text) {
       var e = document.createElement(tag);
-      if (cls) { e.className = cls; }
-      if (text !== undefined) { e.textContent = text; }
+      if (cls) e.className = cls;
+      if (text !== undefined) e.textContent = text;
       return e;
     }
 
     function fmtAgo(ms) {
       var s = Math.max(0, Math.round(ms / 1000));
-      if (s < 5) { return 'ahora'; }
-      if (s < 60) { return 'hace ' + s + ' s'; }
-      if (s < 3600) { return 'hace ' + Math.floor(s / 60) + ' min'; }
+      if (s < 5) return 'ahora';
+      if (s < 60) return 'hace ' + s + ' s';
+      if (s < 3600) return 'hace ' + Math.floor(s / 60) + ' min';
       return 'hace ' + Math.floor(s / 3600) + ' h';
     }
 
     function fmtDate(ts) {
       var d = new Date(ts);
-      if (isNaN(d.getTime())) { return ''; }
+      if (isNaN(d.getTime())) return '';
       return d.toLocaleString('es-BO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
 
-    function setConn(state, text) {
-      var pill = $('conn');
-      pill.className = 'pill ' + state;
-      $('connText').textContent = text;
-    }
-
     function refreshConn() {
-      if (!connected) { setConn('off', 'Sin conexión'); return; }
-      if (!lastTs) { setConn('stale', 'Esperando datos'); $('vAge').textContent = '—'; return; }
+      if (!connected) { $('conn').className = 'pill off'; $('connText').textContent = 'Sin conexión'; return; }
+      if (!lastTs) { $('conn').className = 'pill stale'; $('connText').textContent = 'Esperando datos'; return; }
       var age = Date.now() - lastTs;
       $('vAge').textContent = fmtAgo(age);
-      if (age > STALE_MS) { setConn('stale', 'Sin señal reciente'); }
-      else { setConn('live', 'En vivo'); }
+      if (age > STALE_MS) { $('conn').className = 'pill stale'; $('connText').textContent = 'Sin señal reciente'; }
+      else { $('conn').className = 'pill live'; $('connText').textContent = 'En vivo'; }
     }
 
     function renderUser(u) {
-      if (!u || typeof u !== 'object') { lastTs = 0; return; }
+      if (!u || typeof u !== 'object') return;
       var lat = num(u.latitude), lng = num(u.longitude);
-      if (lat === null || lng === null) { return; }
+      if (lat === null || lng === null) return;
 
       lastPos = [lat, lng];
       lastTs = num(u.timestamp) || 0;
 
-      if (!marker) { marker = L.marker(lastPos, { icon: pinIcon, keyboard: false }).addTo(map); }
-      else { marker.setLatLng(lastPos); }
+      if (!marker) marker = L.marker(lastPos, { icon: pinIcon }).addTo(map);
+      else marker.setLatLng(lastPos);
 
-      if (followUser && lastPos) {
-        map.panTo(lastPos, { animate: true });
-      }
+      if (followUser) map.panTo(lastPos, { animate: true });
 
       $('vLat').textContent = lat.toFixed(6);
       $('vLng').textContent = lng.toFixed(6);
@@ -358,16 +338,10 @@
       if (g && typeof g === 'object') {
         Object.keys(g).forEach(function (id) {
           var v = g[id];
-          if (!v || typeof v !== 'object') { return; }
+          if (!v || typeof v !== 'object') return;
           var lat = num(v.latitude), lng = num(v.longitude), r = num(v.radio);
-          if (lat === null || lng === null || r === null) { return; }
-          list.push({
-            id: id,
-            nombre: String(v.nombre || 'Geocerca').slice(0, 60),
-            lat: lat,
-            lng: lng,
-            radio: Math.min(Math.max(r, 1), 1000000)
-          });
+          if (lat === null || lng === null || r === null) return;
+          list.push({ id: id, nombre: String(v.nombre || 'Geocerca').slice(0, 60), lat: lat, lng: lng, radio: r });
         });
       }
       var key = JSON.stringify(list);
@@ -378,120 +352,51 @@
         fenceLayers = {};
         fences.forEach(function (f) {
           var c = L.circle([f.lat, f.lng], { radius: f.radio, weight: 2, fillOpacity: .22 }).addTo(map);
-          var tip = document.createElement('span');
-          tip.textContent = f.nombre + ' · ' + Math.round(f.radio) + ' m';
-          c.bindTooltip(tip, { direction: 'top', className: 'fence-label' });
+          c.bindTooltip(f.nombre + ' · ' + Math.round(f.radio) + ' m', { direction: 'top', className: 'fence-label' });
           fenceLayers[f.id] = c;
         });
       }
       updateFenceState();
-      renderFenceManagementList();
-    }
-
-    // Panel interactivo de gestión de geocercas en la barra lateral con botones de editar, eliminar, ir y mover
-    function renderFenceManagementList() {
-      var ul = $('fenceList');
-      ul.replaceChildren();
-
-      if (!fences.length) {
-        ul.appendChild(el('li', 'empty', 'Aún no hay geocercas creadas'));
-        $('fenceStatus').textContent = 'Sin geocercas';
-        return;
-      }
-
-      fences.forEach(function (f) {
-        var dentro = insideOf(f);
-        var li = el('li');
-
-        var row = el('div', 'list-row');
-        var left = el('div');
-        left.appendChild(el('span', 'name', f.nombre));
-        left.appendChild(el('span', 'meta', 'Radio: ' + Math.round(f.radio) + ' m'));
-        row.appendChild(left);
-        row.appendChild(el('span', 'chip ' + (dentro ? 'in' : 'out'), dentro ? 'Dentro' : 'Fuera'));
-        li.appendChild(row);
-
-        // Botones de control por cada geocerca (Ir, Mover aquí, Editar, Eliminar)
-        var actions = el('div', 'list-actions');
-
-        var btnGo = el('button', 'btn', 'Ir');
-        btnGo.style.minWidth = 'auto';
-        btnGo.style.padding = '4px 8px';
-        btnGo.style.fontSize = '0.7rem';
-        btnGo.onclick = function() {
-          map.setView([f.lat, f.lng], 16, { animate: true });
-        };
-
-        var btnMoveHere = el('button', 'btn green', 'Mover aquí');
-        btnMoveHere.style.minWidth = 'auto';
-        btnMoveHere.style.padding = '4px 8px';
-        btnMoveHere.style.fontSize = '0.7rem';
-        btnMoveHere.onclick = function() {
-          if (!lastPos) { alert('No hay ubicación actual registrada.'); return; }
-          fetch(DB + '/geocercas/' + f.id + '.json', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ latitude: lastPos[0], longitude: lastPos[1] })
-          }).then(function() { alert('Geocerca movida a tu ubicación actual.'); });
-        };
-
-        var btnEdit = el('button', 'btn', 'Editar');
-        btnEdit.style.minWidth = 'auto';
-        btnEdit.style.padding = '4px 8px';
-        btnEdit.style.fontSize = '0.7rem';
-        btnEdit.onclick = function() {
-          var nuevoNombre = prompt('Editar nombre de la geocerca:', f.nombre);
-          if (nuevoNombre === null) return;
-          var nuevoRadio = prompt('Editar radio en metros:', f.radio);
-          var radioNum = Number(nuevoRadio);
-          if (isNaN(radioNum) || radioNum <= 0) return;
-
-          fetch(DB + '/geocercas/' + f.id + '.json', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre: nuevoNombre, radio: radioNum })
-          }).then(function() { alert('Geocerca actualizada.'); });
-        };
-
-        var btnDel = el('button', 'btn danger', 'Eliminar');
-        btnDel.style.minWidth = 'auto';
-        btnDel.style.padding = '4px 8px';
-        btnDel.style.fontSize = '0.7rem';
-        btnDel.onclick = function() {
-          if (confirm('¿Eliminar la geocerca "' + f.nombre + '"?')) {
-            fetch(DB + '/geocercas/' + f.id + '.json', { method: 'DELETE' })
-                    .then(function() { alert('Geocerca eliminada.'); });
-          }
-        };
-
-        actions.appendChild(btnGo);
-        actions.appendChild(btnMoveHere);
-        actions.appendChild(btnEdit);
-        actions.appendChild(btnDel);
-        li.appendChild(actions);
-
-        ul.appendChild(li);
-      });
-
-      var insideNames = fences.filter(function(f){ return insideOf(f); }).map(function(f){ return f.nombre; });
-      if (insideNames.length) {
-        $('fenceStatus').textContent = 'Dentro de: ' + insideNames.join(', ');
-      } else {
-        $('fenceStatus').textContent = 'Fuera de todas las geocercas';
-      }
     }
 
     function updateFenceState() {
+      var ul = $('fenceList');
+      ul.replaceChildren();
       var inside = [];
+
       fences.forEach(function (f) {
         var dentro = insideOf(f);
-        if (dentro) { inside.push(f.nombre); }
+        if (dentro) inside.push(f.nombre);
+
         var layer = fenceLayers[f.id];
         if (layer) {
           var color = dentro ? COLOR_IN : COLOR_OUT;
           layer.setStyle({ color: color, fillColor: color });
         }
+
+        var li = el('li');
+        var left = el('div');
+        left.appendChild(el('span', 'name', f.nombre));
+        left.appendChild(el('span', 'meta', 'Radio: ' + Math.round(f.radio) + ' m'));
+        li.appendChild(left);
+        li.appendChild(el('span', 'chip ' + (dentro ? 'in' : 'out'), dentro ? 'Dentro' : 'Fuera'));
+
+        // Hacer clic en un elemento de la lista centra el mapa en esa geocerca
+        li.onclick = function() {
+          map.setView([f.lat, f.lng], 16, { animate: true });
+        };
+
+        ul.appendChild(li);
       });
+
+      if (!fences.length) {
+        ul.appendChild(el('li', 'empty', 'Aún no hay geocercas creadas'));
+        $('fenceStatus').textContent = 'Sin geocercas';
+      } else if (inside.length) {
+        $('fenceStatus').textContent = 'Dentro de: ' + inside.join(', ');
+      } else {
+        $('fenceStatus').textContent = 'Fuera de todas las geocercas';
+      }
     }
 
     function renderEvents(obj) {
@@ -500,7 +405,7 @@
       var items = [];
       if (obj && typeof obj === 'object') {
         Object.keys(obj).forEach(function (k) {
-          if (obj[k] && typeof obj[k] === 'object') { items.push({ k: k, v: obj[k] }); }
+          if (obj[k] && typeof obj[k] === 'object') items.push({ k: k, v: obj[k] });
         });
       }
       items.sort(function (a, b) { return a.k < b.k ? 1 : -1; });
@@ -511,14 +416,12 @@
       }
       items.forEach(function (it) {
         var entrada = it.v.evento === 'entrada';
-        var li = el('li', '', '');
-        var row = el('div', 'list-row');
+        var li = el('li');
         var left = el('div');
         left.appendChild(el('span', 'name', String(it.v.geocerca || 'Geocerca').slice(0, 60)));
         left.appendChild(el('span', 'meta', fmtDate(num(it.v.timestamp))));
-        row.appendChild(left);
-        row.appendChild(el('span', 'chip ' + (entrada ? 'in' : 'out'), entrada ? 'Entrada' : 'Salida'));
-        li.appendChild(row);
+        li.appendChild(left);
+        li.appendChild(el('span', 'chip ' + (entrada ? 'in' : 'out'), entrada ? 'Entrada' : 'Salida'));
         ul.appendChild(li);
       });
     }
@@ -535,113 +438,82 @@
     }
 
     function tickEvents() {
-      getJSON('/eventos.json?orderBy=%22%24key%22&limitToLast=8')
+      getJSON('/eventos.json?orderBy="%24key"&limitToLast=8')
               .then(renderEvents)
-              .catch(function () { })
+              .catch(function () {})
               .finally(function () { setTimeout(tickEvents, EVENTS_MS); });
     }
 
-    // ----- Controles Interactivos Avanzados -----
+    // --- Eventos de los botones ---
+    $('btnCenter').onclick = function () {
+      followUser = true;
+      if (lastPos) map.setView(lastPos, 16, { animate: true });
+    };
 
-    // 1. Seguir / Pausar
-    $('btnFollow').addEventListener('click', function () {
-      followUser = !followUser;
-      this.textContent = followUser ? 'Seguir: Activo' : 'Seguir: Pausado';
-      this.classList.toggle('off', !followUser);
-    });
-
-    // 2. Centrar mapa
-    $('btnCenter').addEventListener('click', function () {
-      if (lastPos) { map.setView(lastPos, 16, { animate: true }); }
-      else { alert('Aún no hay una ubicación reciente registrada.'); }
-    });
-
-    // 3. Cambiar modo GPS / Manual (y si es manual, permitir arrastrar o hacer clic para mover la ubicación)
-    $('btnMode').addEventListener('click', function () {
+    $('btnMode').onclick = function () {
       var nuevoModo = (currentMode === 'manual') ? 'GPS' : 'manual';
-      putJSON('/usuario_activo.json', { modo: nuevoModo })
-              .then(function () {
-                currentMode = nuevoModo;
-                $('vMode').textContent = currentMode === 'manual' ? 'Manual' : 'GPS';
-                $('btnMode').textContent = 'Modo: ' + (currentMode === 'manual' ? 'Manual' : 'GPS');
-                if (nuevoModo === 'manual') {
-                  alert('¡Modo manual activado! Ahora puedes hacer clic en cualquier parte del mapa web para mover tu ubicación instantáneamente.');
-                }
-              });
-    });
+      putJSON('/usuario_activo.json', { modo: nuevoModo }).then(function () {
+        currentMode = nuevoModo;
+        $('vMode').textContent = currentMode === 'manual' ? 'Manual' : 'GPS';
+        $('btnMode').textContent = 'Modo: ' + (currentMode === 'manual' ? 'Manual' : 'GPS');
+      });
+    };
 
-    // Clic en el mapa para mover ubicación en Modo Manual
-    map.on('click', function (e) {
-      if (currentMode === 'manual') {
-        var lat = e.latlng.lat;
-        var lng = e.latlng.lng;
-        putJSON('/usuario_activo.json', {
-          latitude: lat,
-          longitude: lng,
-          timestamp: Date.now(),
-          modo: 'manual'
-        }).then(function () {
-          console.log('Ubicación manual actualizada desde la web');
-        });
-      }
-    });
-
-    // 4. Crear círculo rápido en el centro del mapa
-    $('btnCircle').addEventListener('click', function () {
+    $('btnCircle').onclick = function () {
       var center = map.getCenter();
-      var nombreGeocerca = prompt('Nombre de la nueva geocerca:', 'Zona Web');
-      if (!nombreGeocerca) return;
-      var radioMetros = prompt('Radio en metros:', '100');
-      var radioNum = Number(radioMetros);
-      if (!radioNum || isNaN(radioNum)) return;
+      var nom = prompt('Nombre de geocerca:', 'Geocerca Círculo');
+      if (!nom) return;
+      var rad = Number(prompt('Radio en metros:', '100')) || 50;
 
       fetch(DB + '/geocercas.json', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: nombreGeocerca, latitude: center.lat, longitude: center.lng, radio: radioNum })
-      }).then(function() { alert('Geocerca creada con éxito.'); });
-    });
+        body: JSON.stringify({ nombre: nom, latitude: center.lat, longitude: center.lng, radio: rad })
+      });
+    };
 
-    // 5. Dibujar zona interactiva (Calculando radio y posición desde el mapa)
-    $('btnDraw').addEventListener('click', function () {
-      alert('Modo Dibujar Zona: Haz clic en el mapa para marcar el CENTRO de la zona.');
-      var clickCount = 0;
-      var centerPoint = null;
+    $('btnDraw').onclick = function () {
+      alert('Haz clic en el mapa para marcar el centro de la zona.');
+      map.once('click', function (e) {
+        var nom = prompt('Nombre de la zona dibujada:', 'Zona Dibujada');
+        if (!nom) return;
+        var rad = Number(prompt('Radio en metros:', '150')) || 100;
 
-      var drawListener = function(e) {
-        clickCount++;
-        if (clickCount === 1) {
-          centerPoint = e.latlng;
-          alert('Centro marcado. Ahora haz clic en un segundo punto para definir el RADIO (distancia).');
-        } else if (clickCount === 2) {
-          var edgePoint = e.latlng;
-          map.off('click', drawListener);
+        fetch(DB + '/geocercas.json', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre: nom, latitude: e.latlng.lat, longitude: e.latlng.lng, radio: rad })
+        });
+      });
+    };
 
-          var radioCalculado = Math.round(centerPoint.distanceTo(edgePoint));
-          var nombreZona = prompt('Zona delimitada con radio de ' + radioCalculado + 'm. Ingresa el nombre:', 'Zona Dibujada');
-          if (!nombreZona) return;
-
-          fetch(DB + '/geocercas.json', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre: nombreZona, latitude: centerPoint.lat, longitude: centerPoint.lng, radio: Math.max(radioCalculado, 10) })
-          }).then(function() { alert('¡Zona dibujada y guardada correctamente!'); });
+    $('btnGeofences').onclick = function () {
+      if (!fences.length) { alert('No hay geocercas.'); return; }
+      var opt = prompt('Opciones de Geocercas:\n1. Eliminar una geocerca\n\nIngresa el número de la opción:', '1');
+      if (opt === '1') {
+        var listaTxt = fences.map(function(f, i){ return (i+1) + '. ' + f.nombre; }).join('\n');
+        var sel = Number(prompt('Selecciona el número a eliminar:\n\n' + listaTxt));
+        if (sel && fences[sel-1]) {
+          fetch(DB + '/geocercas/' + fences[sel-1].id + '.json', { method: 'DELETE' });
         }
-      };
-      map.on('click', drawListener);
-    });
+      }
+    };
 
-    map.on('dragstart', function () {
-      if (followUser) {
-        followUser = false;
-        $('btnFollow').textContent = 'Seguir: Pausado';
-        $('btnFollow').classList.add('off');
+    // Clic en el mapa en modo manual cambia la posición del usuario en Firebase
+    map.on('click', function (e) {
+      if (currentMode === 'manual') {
+        putJSON('/usuario_activo.json', {
+          latitude: e.latlng.lat,
+          longitude: e.latlng.lng,
+          timestamp: Date.now(),
+          modo: 'manual'
+        });
       }
     });
 
+    map.on('dragstart', function () { followUser = false; });
+
     setInterval(refreshConn, 1000);
-    updateFenceState();
-    renderEvents(null);
     tick();
     tickEvents();
   })();
