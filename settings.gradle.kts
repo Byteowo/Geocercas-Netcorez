@@ -29,4 +29,5 @@ dependencyResolutionManagement {
         }
     }
 }
-
+rootProject.name = "Geocorez"
+include(":app")
