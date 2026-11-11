@@ -80,7 +80,7 @@
     .pill.off .dot { background: var(--bad); box-shadow: 0 0 0 3px rgba(229,72,77,.25); }
 
     /* Distribución */
-    .layout { display: grid; grid-template-columns: 1fr 350px; gap: 16px; height: calc(100vh - 118px); min-height: 540px; }
+    .layout { display: grid; grid-template-columns: 1fr 380px; gap: 16px; height: calc(100vh - 118px); min-height: 540px; }
     .mapwrap { position: relative; overflow: hidden; padding: 6px; }
     #map { width: 100%; height: 100%; border-radius: 15px; background: #cfeaf7; }
 
@@ -94,8 +94,8 @@
     /* Botones tipo gel frutiger aero */
     .btn {
       position: relative; overflow: hidden; cursor: pointer;
-      padding: 10px 20px; min-width: 135px; border-radius: 999px;
-      border: 1.5px solid #fff; color: #fff; font: 600 .85rem "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+      padding: 9px 16px; min-width: 135px; border-radius: 999px;
+      border: 1.5px solid #fff; color: #fff; font: 600.82rem "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
       text-shadow: 0 1px 2px rgba(0,74,115,.6);
       background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom));
       box-shadow: 0 4px 10px rgba(20,100,150,.35), inset 0 -2px 4px rgba(0,60,110,.2);
@@ -108,6 +108,7 @@
     }
     .btn.green { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); text-shadow: 0 1px 2px rgba(36,107,20,.6); }
     .btn.off { background: linear-gradient(180deg, #d9e6ee, #9db4c2); text-shadow: 0 1px 2px rgba(40,70,90,.5); }
+    .btn.danger { background: linear-gradient(180deg, #ff8080, #e5484d); text-shadow: 0 1px 2px rgba(100,20,20,.6); }
     .btn:hover { filter: brightness(1.06); }
     .btn:active { transform: translateY(1px); filter: brightness(.95); }
     .btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px var(--blue-bottom); }
@@ -119,10 +120,12 @@
 
     .list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
     .list li {
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      padding: 9px 12px; border-radius: 14px; font-size: .88rem;
-      background: rgba(255,255,255,.7); border: 1.5px solid rgba(255,255,255,.95);
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 10px 12px; border-radius: 14px; font-size: .85rem;
+      background: rgba(255,255,255,.75); border: 1.5px solid rgba(255,255,255,.95);
     }
+    .list-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .list-actions { display: flex; gap: 6px; margin-top: 4px; }
     .list .name { font-weight: 700; overflow-wrap: anywhere; }
     .list .meta { display: block; font-weight: 400; font-size: .75rem; color: var(--soft); }
     .list .empty { justify-content: center; color: var(--soft); }
@@ -169,7 +172,7 @@
       <span class="orb" aria-hidden="true"></span>
       <div>
         <h1>Geocorez</h1>
-        <p>Mapa en tiempo real (Control Web)</p>
+        <p>Control Total Web (Modo Manual, Círculos, Dibujo y Edición)</p>
       </div>
     </div>
     <div class="pill" id="conn" role="status" aria-live="polite">
@@ -181,14 +184,13 @@
     <section class="glass mapwrap">
       <div id="map" role="application" aria-label="Mapa con la ubicación en tiempo real"></div>
 
-      <!-- Botones de Control Web -->
+      <!-- Botones de Control Completo -->
       <div class="mapbtns">
         <button class="btn" id="btnFollow" type="button">Seguir: Activo</button>
         <button class="btn" id="btnCenter" type="button">Centrar</button>
         <button class="btn green" id="btnMode" type="button">Modo: GPS</button>
         <button class="btn green" id="btnCircle" type="button">+ Círculo aquí</button>
         <button class="btn green" id="btnDraw" type="button">Dibujar zona</button>
-        <button class="btn" id="btnGeofences" type="button">Ver Geocercas</button>
       </div>
     </section>
 
@@ -204,7 +206,7 @@
       </section>
 
       <section class="glass card">
-        <h2>Geocercas</h2>
+        <h2>Geocercas (Gestión Web)</h2>
         <div class="status-line" id="fenceStatus">Sin datos todavía</div>
         <ul class="list" id="fenceList"></ul>
       </section>
@@ -216,7 +218,7 @@
     </aside>
   </main>
 
-  <footer>Geocorez · Control Web interactivo con Mapbox y Firebase</footer>
+  <footer>Geocorez · Sincronización Total Web & Móvil con Mapbox y Firebase</footer>
 </div>
 
 <noscript>Esta página necesita JavaScript para mostrar el mapa.</noscript>
@@ -254,7 +256,7 @@
     });
 
     var marker = null;
-    var followUser = true; // Control de movimiento libre en la web
+    var followUser = true;
     var lastPos = null;
     var lastTs = 0;
     var connected = false;
@@ -334,7 +336,6 @@
       if (!marker) { marker = L.marker(lastPos, { icon: pinIcon, keyboard: false }).addTo(map); }
       else { marker.setLatLng(lastPos); }
 
-      // Solo mueve la cámara automáticamente si el usuario web tiene activado el seguimiento
       if (followUser && lastPos) {
         map.panTo(lastPos, { animate: true });
       }
@@ -384,43 +385,113 @@
         });
       }
       updateFenceState();
+      renderFenceManagementList();
     }
 
-    function updateFenceState() {
+    // Panel interactivo de gestión de geocercas en la barra lateral con botones de editar, eliminar, ir y mover
+    function renderFenceManagementList() {
       var ul = $('fenceList');
       ul.replaceChildren();
-      var inside = [];
+
+      if (!fences.length) {
+        ul.appendChild(el('li', 'empty', 'Aún no hay geocercas creadas'));
+        $('fenceStatus').textContent = 'Sin geocercas';
+        return;
+      }
 
       fences.forEach(function (f) {
         var dentro = insideOf(f);
-        if (dentro) { inside.push(f.nombre); }
+        var li = el('li');
 
+        var row = el('div', 'list-row');
+        var left = el('div');
+        left.appendChild(el('span', 'name', f.nombre));
+        left.appendChild(el('span', 'meta', 'Radio: ' + Math.round(f.radio) + ' m'));
+        row.appendChild(left);
+        row.appendChild(el('span', 'chip ' + (dentro ? 'in' : 'out'), dentro ? 'Dentro' : 'Fuera'));
+        li.appendChild(row);
+
+        // Botones de control por cada geocerca (Ir, Mover aquí, Editar, Eliminar)
+        var actions = el('div', 'list-actions');
+
+        var btnGo = el('button', 'btn', 'Ir');
+        btnGo.style.minWidth = 'auto';
+        btnGo.style.padding = '4px 8px';
+        btnGo.style.fontSize = '0.7rem';
+        btnGo.onclick = function() {
+          map.setView([f.lat, f.lng], 16, { animate: true });
+        };
+
+        var btnMoveHere = el('button', 'btn green', 'Mover aquí');
+        btnMoveHere.style.minWidth = 'auto';
+        btnMoveHere.style.padding = '4px 8px';
+        btnMoveHere.style.fontSize = '0.7rem';
+        btnMoveHere.onclick = function() {
+          if (!lastPos) { alert('No hay ubicación actual registrada.'); return; }
+          fetch(DB + '/geocercas/' + f.id + '.json', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ latitude: lastPos[0], longitude: lastPos[1] })
+          }).then(function() { alert('Geocerca movida a tu ubicación actual.'); });
+        };
+
+        var btnEdit = el('button', 'btn', 'Editar');
+        btnEdit.style.minWidth = 'auto';
+        btnEdit.style.padding = '4px 8px';
+        btnEdit.style.fontSize = '0.7rem';
+        btnEdit.onclick = function() {
+          var nuevoNombre = prompt('Editar nombre de la geocerca:', f.nombre);
+          if (nuevoNombre === null) return;
+          var nuevoRadio = prompt('Editar radio en metros:', f.radio);
+          var radioNum = Number(nuevoRadio);
+          if (isNaN(radioNum) || radioNum <= 0) return;
+
+          fetch(DB + '/geocercas/' + f.id + '.json', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre: nuevoNombre, radio: radioNum })
+          }).then(function() { alert('Geocerca actualizada.'); });
+        };
+
+        var btnDel = el('button', 'btn danger', 'Eliminar');
+        btnDel.style.minWidth = 'auto';
+        btnDel.style.padding = '4px 8px';
+        btnDel.style.fontSize = '0.7rem';
+        btnDel.onclick = function() {
+          if (confirm('¿Eliminar la geocerca "' + f.nombre + '"?')) {
+            fetch(DB + '/geocercas/' + f.id + '.json', { method: 'DELETE' })
+                    .then(function() { alert('Geocerca eliminada.'); });
+          }
+        };
+
+        actions.appendChild(btnGo);
+        actions.appendChild(btnMoveHere);
+        actions.appendChild(btnEdit);
+        actions.appendChild(btnDel);
+        li.appendChild(actions);
+
+        ul.appendChild(li);
+      });
+
+      var insideNames = fences.filter(function(f){ return insideOf(f); }).map(function(f){ return f.nombre; });
+      if (insideNames.length) {
+        $('fenceStatus').textContent = 'Dentro de: ' + insideNames.join(', ');
+      } else {
+        $('fenceStatus').textContent = 'Fuera de todas las geocercas';
+      }
+    }
+
+    function updateFenceState() {
+      var inside = [];
+      fences.forEach(function (f) {
+        var dentro = insideOf(f);
+        if (dentro) { inside.push(f.nombre); }
         var layer = fenceLayers[f.id];
         if (layer) {
           var color = dentro ? COLOR_IN : COLOR_OUT;
           layer.setStyle({ color: color, fillColor: color });
         }
-
-        var li = el('li');
-        var left = el('div');
-        left.appendChild(el('span', 'name', f.nombre));
-        left.appendChild(el('span', 'meta', 'Radio: ' + Math.round(f.radio) + ' m'));
-        li.appendChild(left);
-        li.appendChild(el('span', 'chip ' + (dentro ? 'in' : 'out'), dentro ? 'Dentro' : 'Fuera'));
-        ul.appendChild(li);
       });
-
-      if (!fences.length) {
-        var empty = el('li', 'empty', 'Aún no hay geocercas creadas');
-        ul.appendChild(empty);
-        $('fenceStatus').textContent = 'Sin geocercas';
-      } else if (!lastPos) {
-        $('fenceStatus').textContent = 'Esperando ubicación…';
-      } else if (inside.length) {
-        $('fenceStatus').textContent = 'Dentro de: ' + inside.join(', ');
-      } else {
-        $('fenceStatus').textContent = 'Fuera de todas las geocercas';
-      }
     }
 
     function renderEvents(obj) {
@@ -440,12 +511,14 @@
       }
       items.forEach(function (it) {
         var entrada = it.v.evento === 'entrada';
-        var li = el('li');
+        var li = el('li', '', '');
+        var row = el('div', 'list-row');
         var left = el('div');
         left.appendChild(el('span', 'name', String(it.v.geocerca || 'Geocerca').slice(0, 60)));
         left.appendChild(el('span', 'meta', fmtDate(num(it.v.timestamp))));
-        li.appendChild(left);
-        li.appendChild(el('span', 'chip ' + (entrada ? 'in' : 'out'), entrada ? 'Entrada' : 'Salida'));
+        row.appendChild(left);
+        row.appendChild(el('span', 'chip ' + (entrada ? 'in' : 'out'), entrada ? 'Entrada' : 'Salida'));
+        li.appendChild(row);
         ul.appendChild(li);
       });
     }
@@ -468,25 +541,22 @@
               .finally(function () { setTimeout(tickEvents, EVENTS_MS); });
     }
 
-    // ----- Controles Interactivos desde la Web -----
+    // ----- Controles Interactivos Avanzados -----
 
-    // Botón para alternar si la web sigue automáticamente al usuario o se mueve libremente
+    // 1. Seguir / Pausar
     $('btnFollow').addEventListener('click', function () {
       followUser = !followUser;
       this.textContent = followUser ? 'Seguir: Activo' : 'Seguir: Pausado';
       this.classList.toggle('off', !followUser);
     });
 
-    // Centrar el mapa manualmente en la posición actual
+    // 2. Centrar mapa
     $('btnCenter').addEventListener('click', function () {
-      if (lastPos) {
-        map.setView(lastPos, 16, { animate: true });
-      } else {
-        alert('Aún no hay una ubicación reciente registrada.');
-      }
+      if (lastPos) { map.setView(lastPos, 16, { animate: true }); }
+      else { alert('Aún no hay una ubicación reciente registrada.'); }
     });
 
-    // Cambiar modo (GPS / Manual) directamente desde la web
+    // 3. Cambiar modo GPS / Manual (y si es manual, permitir arrastrar o hacer clic para mover la ubicación)
     $('btnMode').addEventListener('click', function () {
       var nuevoModo = (currentMode === 'manual') ? 'GPS' : 'manual';
       putJSON('/usuario_activo.json', { modo: nuevoModo })
@@ -494,84 +564,73 @@
                 currentMode = nuevoModo;
                 $('vMode').textContent = currentMode === 'manual' ? 'Manual' : 'GPS';
                 $('btnMode').textContent = 'Modo: ' + (currentMode === 'manual' ? 'Manual' : 'GPS');
-              })
-              .catch(function (err) {
-                console.error('Error al cambiar modo:', err);
+                if (nuevoModo === 'manual') {
+                  alert('¡Modo manual activado! Ahora puedes hacer clic en cualquier parte del mapa web para mover tu ubicación instantáneamente.');
+                }
               });
     });
 
-    // Crear geocerca circular basada en el centro actual de la vista del mapa web
+    // Clic en el mapa para mover ubicación en Modo Manual
+    map.on('click', function (e) {
+      if (currentMode === 'manual') {
+        var lat = e.latlng.lat;
+        var lng = e.latlng.lng;
+        putJSON('/usuario_activo.json', {
+          latitude: lat,
+          longitude: lng,
+          timestamp: Date.now(),
+          modo: 'manual'
+        }).then(function () {
+          console.log('Ubicación manual actualizada desde la web');
+        });
+      }
+    });
+
+    // 4. Crear círculo rápido en el centro del mapa
     $('btnCircle').addEventListener('click', function () {
       var center = map.getCenter();
-      var nombreGeocerca = prompt('Nombre para la nueva geocerca creada desde la Web:', 'Geocerca Web');
+      var nombreGeocerca = prompt('Nombre de la nueva geocerca:', 'Zona Web');
       if (!nombreGeocerca) return;
-      var radioMetros = prompt('Radio de la geocerca en metros:', '100');
+      var radioMetros = prompt('Radio en metros:', '100');
       var radioNum = Number(radioMetros);
       if (!radioNum || isNaN(radioNum)) return;
-
-      var nuevaGeocerca = {
-        nombre: nombreGeocerca,
-        latitude: center.lat,
-        longitude: center.lng,
-        radio: radioNum
-      };
 
       fetch(DB + '/geocercas.json', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(nuevaGeocerca)
-      })
-              .then(function() {
-                alert('¡Geocerca creada y guardada en Firebase desde la web exitosamente!');
-              })
-              .catch(function(err) {
-                alert('Error al registrar geocerca: ' + err);
-              });
+        body: JSON.stringify({ nombre: nombreGeocerca, latitude: center.lat, longitude: center.lng, radio: radioNum })
+      }).then(function() { alert('Geocerca creada con éxito.'); });
     });
 
-    // Dibujar zona personalizada haciendo clic en el mapa
+    // 5. Dibujar zona interactiva (Calculando radio y posición desde el mapa)
     $('btnDraw').addEventListener('click', function () {
-      alert('Modo de dibujo activado: Haz clic en cualquier lugar del mapa web para fijar el centro de una nueva zona.');
+      alert('Modo Dibujar Zona: Haz clic en el mapa para marcar el CENTRO de la zona.');
+      var clickCount = 0;
+      var centerPoint = null;
 
-      var tempListener = function(e) {
-        var lat = e.latlng.lat;
-        var lng = e.latlng.lng;
-        map.off('click', tempListener); // Desactivar tras el primer clic
+      var drawListener = function(e) {
+        clickCount++;
+        if (clickCount === 1) {
+          centerPoint = e.latlng;
+          alert('Centro marcado. Ahora haz clic en un segundo punto para definir el RADIO (distancia).');
+        } else if (clickCount === 2) {
+          var edgePoint = e.latlng;
+          map.off('click', drawListener);
 
-        var nombreZona = prompt('Punto fijado en (' + lat.toFixed(4) + ', ' + lng.toFixed(4) + '). Ingresa el nombre de la zona:', 'Zona Web');
-        if (!nombreZona) return;
+          var radioCalculado = Math.round(centerPoint.distanceTo(edgePoint));
+          var nombreZona = prompt('Zona delimitada con radio de ' + radioCalculado + 'm. Ingresa el nombre:', 'Zona Dibujada');
+          if (!nombreZona) return;
 
-        var radioZona = prompt('Ingresa el radio en metros para esta zona:', '150');
-        var radioVal = Number(radioZona) || 100;
-
-        fetch(DB + '/geocercas.json', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nombre: nombreZona,
-            latitude: lat,
-            longitude: lng,
-            radio: radioVal
-          })
-        }).then(function() {
-          alert('¡Zona creada con éxito desde el mapa web!');
-        });
+          fetch(DB + '/geocercas.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre: nombreZona, latitude: centerPoint.lat, longitude: centerPoint.lng, radio: Math.max(radioCalculado, 10) })
+          }).then(function() { alert('¡Zona dibujada y guardada correctamente!'); });
+        }
       };
-
-      map.on('click', tempListener);
+      map.on('click', drawListener);
     });
 
-    // Ver lista de geocercas activas
-    $('btnGeofences').addEventListener('click', function () {
-      if (fences.length === 0) {
-        alert('No hay geocercas registradas.');
-      } else {
-        var listado = fences.map(function(f) { return '• ' + f.nombre + ' (' + Math.round(f.radio) + 'm)'; }).join('\n');
-        alert('Geocercas en el sistema:\n\n' + listado);
-      }
-    });
-
-    // Si el usuario mueve el mapa manualmente con el mouse, se pausa automáticamente el seguimiento forzoso para darle libertad
     map.on('dragstart', function () {
       if (followUser) {
         followUser = false;
