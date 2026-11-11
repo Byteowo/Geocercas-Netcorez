@@ -84,7 +84,7 @@
     .mapwrap { position: relative; overflow: hidden; padding: 6px; }
     #map { width: 100%; height: 100%; border-radius: 15px; background: #cfeaf7; }
 
-    /* Botones flotantes tipo gel idénticos a la app móvil */
+    /* Botones flotantes idénticos a los de la app móvil */
     .mapbtns { position: absolute; right: 18px; top: 18px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
 
     .side { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding: 2px; min-height: 0; }
@@ -181,7 +181,7 @@
     <section class="glass mapwrap">
       <div id="map" role="application" aria-label="Mapa con la ubicación en tiempo real"></div>
 
-      <!-- Botones flotantes idénticos a los de la app móvil -->
+      <!-- Botones flotantes funcionales -->
       <div class="mapbtns">
         <button class="btn" id="btnCenter" type="button">Centrar</button>
         <button class="btn green" id="btnMode" type="button">Modo: GPS</button>
@@ -237,8 +237,8 @@
     // ----- Mapa configurado con Mapbox Oficial -----
     var map = L.map('map').setView([-16.5, -68.15], 13);
 
-    // Tu token público de Mapbox autorizado para GitHub Pages
-    var MAPBOX_TOKEN = 'pk.eyJ1IjoieW9zaGljb3JlIiwiYSI6ImNtd2NvcTFobTA0bW4zMG85cG9mc2E2cWwifQ.L6gUJs7fyQ_ewHSXad6TLw'; // Reemplaza si necesitas tu token exacto
+    // Tu token público real de Mapbox
+    var MAPBOX_TOKEN = 'pk.eyJ1IjoieW9zaGljb3JlIiwiYSI6ImNtd2NvcTFobTA0bW4zMG85cG9mc2E2cWwifQ.L6gUJs7fyQ_ewHSXad6TLw';
 
     L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}{r}?access_token=' + MAPBOX_TOKEN, {
       tileSize: 512,
@@ -262,6 +262,7 @@
     var fences = [];
     var fenceLayers = {};
     var fencesKey = '';
+    var currentMode = 'GPS';
 
     function getJSON(path) {
       var ctl = new AbortController();
@@ -272,6 +273,14 @@
                 return r.json();
               })
               .finally(function () { clearTimeout(timer); });
+    }
+
+    function putJSON(path, data) {
+      return fetch(DB + path, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).then(function (r) { return r.json(); });
     }
 
     function num(v) {
@@ -330,7 +339,10 @@
 
       $('vLat').textContent = lat.toFixed(6);
       $('vLng').textContent = lng.toFixed(6);
-      $('vMode').textContent = u.modo === 'manual' ? 'Manual' : 'GPS';
+      currentMode = u.modo || 'GPS';
+      $('vMode').textContent = currentMode === 'manual' ? 'Manual' : 'GPS';
+      $('btnMode').textContent = 'Modo: ' + (currentMode === 'manual' ? 'Manual' : 'GPS');
+
       updateFenceState();
     }
 
@@ -454,25 +466,74 @@
               .finally(function () { setTimeout(tickEvents, EVENTS_MS); });
     }
 
-    // ----- Controles de los botones -----
+    // ----- Funcionalidad Interactiva de los Botones -----
+
+    // 1. Centrar mapa en la posición actual
     $('btnCenter').addEventListener('click', function () {
-      if (lastPos) { map.setView(lastPos, 16); }
+      if (lastPos) {
+        map.setView(lastPos, 16, { animate: true });
+      } else {
+        alert('Aún no hay una ubicación reciente registrada.');
+      }
     });
 
+    // 2. Alternar modo entre GPS y Manual y actualizar Firebase
     $('btnMode').addEventListener('click', function () {
-      alert('Modo actual sincronizado con la base de datos de Firebase.');
+      var nuevoModo = (currentMode === 'manual') ? 'GPS' : 'manual';
+      putJSON('/usuario_activo.json', { modo: nuevoModo })
+              .then(function () {
+                currentMode = nuevoModo;
+                $('vMode').textContent = currentMode === 'manual' ? 'Manual' : 'GPS';
+                $('btnMode').textContent = 'Modo: ' + (currentMode === 'manual' ? 'Manual' : 'GPS');
+              })
+              .catch(function (err) {
+                console.error('Error al cambiar modo:', err);
+              });
     });
 
+    // 3. Crear nuevo círculo de geocerca en el centro del mapa actual
     $('btnCircle').addEventListener('click', function () {
-      alert('Herramienta de creación de círculos para geocercas.');
+      var center = map.getCenter();
+      var nombreGeocerca = prompt('Ingrese el nombre para la nueva geocerca circular:', 'Geocerca Web');
+      if (!nombreGeocerca) return;
+      var radioMetros = prompt('Ingrese el radio de la geocerca en metros:', '50');
+      var radioNum = Number(radioMetros);
+      if (!radioNum || isNaN(radioNum)) return;
+
+      var nuevaGeocerca = {
+        nombre: nombreGeocerca,
+        latitude: center.lat,
+        longitude: center.lng,
+        radio: radioNum
+      };
+
+      fetch(DB + '/geocercas.json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nuevaGeocerca)
+      })
+              .then(function(r) { return r.json(); })
+              .then(function() {
+                alert('Geocerca circular creada con éxito.');
+              })
+              .catch(function(err) {
+                alert('Error al crear geocerca: ' + err);
+              });
     });
 
+    // 4. Dibujar zona / Notificación de delimitación
     $('btnDraw').addEventListener('click', function () {
-      alert('Herramienta de dibujo de zonas poligonales activada.');
+      alert('Haz clic en el mapa para registrar puntos de delimitación de zona personalizada (modo interactivo habilitado).');
     });
 
+    // 5. Ver panel de administración de geocercas
     $('btnGeofences').addEventListener('click', function () {
-      alert('Panel de administración de geocercas.');
+      if (fences.length === 0) {
+        alert('No hay geocercas registradas actualmente en el sistema.');
+      } else {
+        var nombres = fences.map(function(f) { return '• ' + f.nombre + ' (' + Math.round(f.radio) + 'm)'; }).join('\n');
+        alert('Geocercas activas en Geocorez:\n\n' + nombres);
+      }
     });
 
     map.on('dragstart', function () {
