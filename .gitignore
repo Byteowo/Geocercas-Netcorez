@@ -7,3 +7,4 @@
 /app/build/
 .kotlin/
 app/src/main/res/values/mapbox_token.xml
+google-services.json
