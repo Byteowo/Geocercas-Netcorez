@@ -30,7 +30,7 @@
       background-attachment: fixed;
     }
 
-    /* Burbujas Frutiger Aero */
+    /* Burbujas decorativas Frutiger Aero */
     .bubbles { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
     .bubbles i {
       position: absolute; border-radius: 50%;
@@ -46,7 +46,7 @@
 
     .app { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 16px; }
 
-    /* Glassmorphism */
+    /* Efecto Vidrio / Aero Glass */
     .glass {
       background: linear-gradient(180deg, rgba(255,255,255,.88), rgba(205,239,255,.68));
       border: 1.5px solid rgba(255,255,255,.95);
@@ -56,6 +56,7 @@
       backdrop-filter: blur(10px);
     }
 
+    /* Cabecera */
     .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; margin-bottom: 16px; }
     .brand { display: flex; align-items: center; gap: 12px; }
     .orb {
@@ -78,21 +79,33 @@
     .pill.stale .dot { background: var(--warn); box-shadow: 0 0 0 3px rgba(240,163,10,.28); }
     .pill.off .dot { background: var(--bad); box-shadow: 0 0 0 3px rgba(229,72,77,.25); }
 
-    .layout { display: grid; grid-template-columns: 1fr 350px; gap: 16px; height: calc(100vh - 118px); min-height: 540px; }
+    /* Distribución */
+    .layout { display: grid; grid-template-columns: 1fr 390px; gap: 16px; height: calc(100vh - 118px); min-height: 540px; }
     .mapwrap { position: relative; overflow: hidden; padding: 6px; }
     #map { width: 100%; height: 100%; border-radius: 15px; background: #cfeaf7; }
 
-    /* Botones flotantes corregidos */
+    /* Botones flotantes interactivos */
     .mapbtns { position: absolute; right: 18px; top: 18px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+
+    /* Panel flotante de dibujo activo */
+    .draw-panel {
+      position: absolute; left: 18px; bottom: 24px; z-index: 1000; display: none;
+      background: rgba(255, 255, 255, 0.92); padding: 12px 16px; border-radius: 16px;
+      border: 1.5px solid #fff; box-shadow: 0 6px 20px rgba(20,100,150,.3);
+      backdrop-filter: blur(8px); flex-direction: column; gap: 8px; min-width: 220px;
+    }
+    .draw-panel.active { display: flex; }
+    .draw-panel p { margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--deep); }
 
     .side { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding: 2px; min-height: 0; }
     .card { padding: 16px 18px; }
     h2 { margin: 0 0 10px; font-size: .95rem; text-transform: uppercase; letter-spacing: .8px; color: var(--soft); }
 
+    /* Botones tipo gel frutiger aero */
     .btn {
       position: relative; overflow: hidden; cursor: pointer;
-      padding: 10px 20px; min-width: 135px; border-radius: 999px;
-      border: 1.5px solid #fff; color: #fff; font: 600 .85rem "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+      padding: 9px 16px; min-width: 120px; border-radius: 999px;
+      border: 1.5px solid #fff; color: #fff; font: 600 .82rem "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
       text-shadow: 0 1px 2px rgba(0,74,115,.6);
       background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom));
       box-shadow: 0 4px 10px rgba(20,100,150,.35), inset 0 -2px 4px rgba(0,60,110,.2);
@@ -105,28 +118,32 @@
     }
     .btn.green { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); text-shadow: 0 1px 2px rgba(36,107,20,.6); }
     .btn.off { background: linear-gradient(180deg, #d9e6ee, #9db4c2); text-shadow: 0 1px 2px rgba(40,70,90,.5); }
+    .btn.danger { background: linear-gradient(180deg, #ff8080, #e5484d); text-shadow: 0 1px 2px rgba(100,20,20,.6); }
     .btn:hover { filter: brightness(1.06); }
     .btn:active { transform: translateY(1px); filter: brightness(.95); }
 
+    /* Datos */
     dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; }
     dt { color: var(--soft); font-size: .85rem; }
     dd { margin: 0; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
     .list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
     .list li {
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      padding: 9px 12px; border-radius: 14px; font-size: .88rem; cursor: pointer;
-      background: rgba(255,255,255,.7); border: 1.5px solid rgba(255,255,255,.95);
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 10px 12px; border-radius: 14px; font-size: .85rem;
+      background: rgba(255,255,255,.75); border: 1.5px solid rgba(255,255,255,.95);
     }
-    .list li:hover { background: rgba(255,255,255,.9); }
+    .list-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .list-actions { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .list .name { font-weight: 700; overflow-wrap: anywhere; }
     .list .meta { display: block; font-weight: 400; font-size: .75rem; color: var(--soft); }
-    .list .empty { justify-content: center; color: var(--soft); cursor: default; }
+    .list .empty { justify-content: center; color: var(--soft); }
     .chip { flex: none; padding: 3px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
     .chip.in { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); }
     .chip.out { background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom)); }
     .status-line { font-weight: 700; }
 
+    /* Marcador y animaciones */
     .pin { position: relative; width: 28px; height: 28px; }
     .pin span {
       position: absolute; inset: 4px; border-radius: 50%;
@@ -143,6 +160,7 @@
       background: rgba(255,255,255,.92); border: 1px solid #fff; border-radius: 10px;
       color: var(--deep); font-weight: 700; box-shadow: 0 2px 8px rgba(20,100,150,.3);
     }
+    .leaflet-container a { color: var(--blue-bottom); }
 
     footer { text-align: center; font-size: .75rem; color: var(--soft); margin-top: 14px; }
 
@@ -163,7 +181,7 @@
       <span class="orb" aria-hidden="true"></span>
       <div>
         <h1>Geocorez</h1>
-        <p>Mapa en tiempo real</p>
+        <p>Control Total Web (Dibujo por puntos, Modo Manual y Edición)</p>
       </div>
     </div>
     <div class="pill" id="conn" role="status" aria-live="polite">
@@ -177,11 +195,21 @@
 
       <!-- Botones flotantes -->
       <div class="mapbtns">
+        <button class="btn" id="btnFollow" type="button">Seguir: Activo</button>
         <button class="btn" id="btnCenter" type="button">Centrar</button>
         <button class="btn green" id="btnMode" type="button">Modo: GPS</button>
         <button class="btn green" id="btnCircle" type="button">+ Círculo</button>
         <button class="btn green" id="btnDraw" type="button">Dibujar zona</button>
-        <button class="btn" id="btnGeofences" type="button">Geocercas</button>
+      </div>
+
+      <!-- Panel flotante idéntico al móvil para dibujar polígonos por puntos -->
+      <div class="draw-panel" id="drawPanel">
+        <p id="drawInfo">Puntos: 0 (mínimo 3)</p>
+        <div style="display: flex; gap: 6px;">
+          <button class="btn" id="btnUndo" type="button" style="padding: 6px 10px; font-size: 0.75rem;">Deshacer</button>
+          <button class="btn green" id="btnFinish" type="button" style="padding: 6px 10px; font-size: 0.75rem;" disabled>Terminar</button>
+          <button class="btn danger" id="btnCancel" type="button" style="padding: 6px 10px; font-size: 0.75rem;">Cancelar</button>
+        </div>
       </div>
     </section>
 
@@ -197,7 +225,7 @@
       </section>
 
       <section class="glass card">
-        <h2>Geocercas</h2>
+        <h2>Geocercas (Gestión Web)</h2>
         <div class="status-line" id="fenceStatus">Sin datos todavía</div>
         <ul class="list" id="fenceList"></ul>
       </section>
@@ -209,7 +237,7 @@
     </aside>
   </main>
 
-  <footer>Geocorez · Seguimiento en tiempo real con Mapbox y Firebase</footer>
+  <footer>Geocorez · Sincronización Web & Móvil con Mapbox y Firebase</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -229,8 +257,7 @@
 
     var map = L.map('map').setView([-16.5, -68.15], 13);
 
-    // Reemplaza por tu token público de Mapbox autorizado
-    var MAPBOX_TOKEN = 'pk.eyJ1IjoieW9zaGljb3JlIiwiYSI6ImNtd2NvcTFobTA0bW4zMG85cG9mc2E2cWwifQ.L6gUJs7fyQ_ewHSXad6TLw';
+    var MAPBOX_TOKEN = 'pk.eyJ1IjoieW9zaGljb3JlIiwiYSI6ImNtd2NvcTFobTA0bW4zMG85cG9mc2E2cWwifQ.L6gUJs7fyQ_ewHSXad6TLw'; // Reemplaza por tu token real
 
     L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}{r}?access_token=' + MAPBOX_TOKEN, {
       tileSize: 512,
@@ -255,6 +282,12 @@
     var fenceLayers = {};
     var fencesKey = '';
     var currentMode = 'GPS';
+
+    // Variables para el modo de dibujo por puntos (polígono)
+    var isDrawing = false;
+    var drawPoints = [];
+    var tempMarkers = [];
+    var tempPolyline = null;
 
     function getJSON(path) {
       var ctl = new AbortController();
@@ -357,46 +390,99 @@
         });
       }
       updateFenceState();
+      renderFenceManagementList();
     }
 
-    function updateFenceState() {
+    // Panel lateral de gestión completo con botones de Ir, Mover aquí, Editar y Eliminar
+    function renderFenceManagementList() {
       var ul = $('fenceList');
       ul.replaceChildren();
-      var inside = [];
+
+      if (!fences.length) {
+        ul.appendChild(el('li', 'empty', 'Aún no hay geocercas creadas'));
+        $('fenceStatus').textContent = 'Sin geocercas';
+        return;
+      }
 
       fences.forEach(function (f) {
         var dentro = insideOf(f);
-        if (dentro) inside.push(f.nombre);
+        var li = el('li');
 
+        var row = el('div', 'list-row');
+        var left = el('div');
+        left.appendChild(el('span', 'name', f.nombre));
+        left.appendChild(el('span', 'meta', 'Radio: ' + Math.round(f.radio) + ' m'));
+        row.appendChild(left);
+        row.appendChild(el('span', 'chip ' + (dentro ? 'in' : 'out'), dentro ? 'Dentro' : 'Fuera'));
+        li.appendChild(row);
+
+        var actions = el('div', 'list-actions');
+
+        var btnGo = el('button', 'btn', 'Ir');
+        btnGo.style.minWidth = 'auto'; btnGo.style.padding = '4px 8px'; btnGo.style.fontSize = '0.7rem';
+        btnGo.onclick = function() { map.setView([f.lat, f.lng], 16, { animate: true }); };
+
+        var btnMove = el('button', 'btn green', 'Mover aquí');
+        btnMove.style.minWidth = 'auto'; btnMove.style.padding = '4px 8px'; btnMove.style.fontSize = '0.7rem';
+        btnMove.onclick = function() {
+          if (!lastPos) { alert('No hay ubicación actual.'); return; }
+          fetch(DB + '/geocercas/' + f.id + '.json', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ latitude: lastPos[0], longitude: lastPos[1] })
+          }).then(function() { alert('Geocerca movida a tu ubicación.'); });
+        };
+
+        var btnEdit = el('button', 'btn', 'Editar');
+        btnEdit.style.minWidth = 'auto'; btnEdit.style.padding = '4px 8px'; btnEdit.style.fontSize = '0.7rem';
+        btnEdit.onclick = function() {
+          var nom = prompt('Nuevo nombre:', f.nombre);
+          if (nom === null) return;
+          var rad = Number(prompt('Nuevo radio en metros:', f.radio));
+          if (isNaN(rad) || rad <= 0) return;
+
+          fetch(DB + '/geocercas/' + f.id + '.json', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre: nom, radio: rad })
+          }).then(function() { alert('Geocerca actualizada.'); });
+        };
+
+        var btnDel = el('button', 'btn danger', 'Eliminar');
+        btnDel.style.minWidth = 'auto'; btnDel.style.padding = '4px 8px'; btnDel.style.fontSize = '0.7rem';
+        btnDel.onclick = function() {
+          if (confirm('¿Eliminar "' + f.nombre + '"?')) {
+            fetch(DB + '/geocercas/' + f.id + '.json', { method: 'DELETE' })
+                    .then(function() { alert('Geocerca eliminada.'); });
+          }
+        };
+
+        actions.appendChild(btnGo);
+        actions.appendChild(btnMove);
+        actions.appendChild(btnEdit);
+        actions.appendChild(btnDel);
+        li.appendChild(actions);
+
+        ul.appendChild(li);
+      });
+
+      var insideNames = fences.filter(function(f){ return insideOf(f); }).map(function(f){ return f.nombre; });
+      if (insideNames.length) {
+        $('fenceStatus').textContent = 'Dentro de: ' + insideNames.join(', ');
+      } else {
+        $('fenceStatus').textContent = 'Fuera de todas las geocercas';
+      }
+    }
+
+    function updateFenceState() {
+      fences.forEach(function (f) {
+        var dentro = insideOf(f);
         var layer = fenceLayers[f.id];
         if (layer) {
           var color = dentro ? COLOR_IN : COLOR_OUT;
           layer.setStyle({ color: color, fillColor: color });
         }
-
-        var li = el('li');
-        var left = el('div');
-        left.appendChild(el('span', 'name', f.nombre));
-        left.appendChild(el('span', 'meta', 'Radio: ' + Math.round(f.radio) + ' m'));
-        li.appendChild(left);
-        li.appendChild(el('span', 'chip ' + (dentro ? 'in' : 'out'), dentro ? 'Dentro' : 'Fuera'));
-
-        // Hacer clic en un elemento de la lista centra el mapa en esa geocerca
-        li.onclick = function() {
-          map.setView([f.lat, f.lng], 16, { animate: true });
-        };
-
-        ul.appendChild(li);
       });
-
-      if (!fences.length) {
-        ul.appendChild(el('li', 'empty', 'Aún no hay geocercas creadas'));
-        $('fenceStatus').textContent = 'Sin geocercas';
-      } else if (inside.length) {
-        $('fenceStatus').textContent = 'Dentro de: ' + inside.join(', ');
-      } else {
-        $('fenceStatus').textContent = 'Fuera de todas las geocercas';
-      }
     }
 
     function renderEvents(obj) {
@@ -417,11 +503,13 @@
       items.forEach(function (it) {
         var entrada = it.v.evento === 'entrada';
         var li = el('li');
+        var row = el('div', 'list-row');
         var left = el('div');
         left.appendChild(el('span', 'name', String(it.v.geocerca || 'Geocerca').slice(0, 60)));
         left.appendChild(el('span', 'meta', fmtDate(num(it.v.timestamp))));
-        li.appendChild(left);
-        li.appendChild(el('span', 'chip ' + (entrada ? 'in' : 'out'), entrada ? 'Entrada' : 'Salida'));
+        row.appendChild(left);
+        row.appendChild(el('span', 'chip ' + (entrada ? 'in' : 'out'), entrada ? 'Entrada' : 'Salida'));
+        li.appendChild(row);
         ul.appendChild(li);
       });
     }
@@ -444,9 +532,17 @@
               .finally(function () { setTimeout(tickEvents, EVENTS_MS); });
     }
 
-    // --- Eventos de los botones ---
+    // --- Controles de Botones ---
+    $('btnFollow').onclick = function () {
+      followUser = !followUser;
+      this.textContent = followUser ? 'Seguir: Activo' : 'Seguir: Pausado';
+      this.classList.toggle('off', !followUser);
+    };
+
     $('btnCenter').onclick = function () {
       followUser = true;
+      $('btnFollow').textContent = 'Seguir: Activo';
+      $('btnFollow').classList.remove('off');
       if (lastPos) map.setView(lastPos, 16, { animate: true });
     };
 
@@ -456,12 +552,15 @@
         currentMode = nuevoModo;
         $('vMode').textContent = currentMode === 'manual' ? 'Manual' : 'GPS';
         $('btnMode').textContent = 'Modo: ' + (currentMode === 'manual' ? 'Manual' : 'GPS');
+        if (nuevoModo === 'manual') {
+          alert('Modo manual activo: haz clic en cualquier parte del mapa para mover tu ubicación.');
+        }
       });
     };
 
     $('btnCircle').onclick = function () {
       var center = map.getCenter();
-      var nom = prompt('Nombre de geocerca:', 'Geocerca Círculo');
+      var nom = prompt('Nombre de la geocerca circular:', 'Geocerca Web');
       if (!nom) return;
       var rad = Number(prompt('Radio en metros:', '100')) || 50;
 
@@ -469,49 +568,107 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nombre: nom, latitude: center.lat, longitude: center.lng, radio: rad })
-      });
+      }).then(function() { alert('Geocerca circular creada.'); });
     };
 
+    // --- Lógica de Dibujo por Puntos (Polígono idéntico a la app móvil) ---
     $('btnDraw').onclick = function () {
-      alert('Haz clic en el mapa para marcar el centro de la zona.');
-      map.once('click', function (e) {
-        var nom = prompt('Nombre de la zona dibujada:', 'Zona Dibujada');
-        if (!nom) return;
-        var rad = Number(prompt('Radio en metros:', '150')) || 100;
-
-        fetch(DB + '/geocercas.json', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nombre: nom, latitude: e.latlng.lat, longitude: e.latlng.lng, radio: rad })
-        });
-      });
+      isDrawing = true;
+      drawPoints = [];
+      tempMarkers = [];
+      $('drawPanel').classList.add('active');
+      $('drawInfo').textContent = 'Puntos: 0 (mínimo 3)';
+      $('btnFinish').disabled = true;
+      alert('Modo dibujo por puntos activado: haz clic en el mapa para agregar vértices.');
     };
 
-    $('btnGeofences').onclick = function () {
-      if (!fences.length) { alert('No hay geocercas.'); return; }
-      var opt = prompt('Opciones de Geocercas:\n1. Eliminar una geocerca\n\nIngresa el número de la opción:', '1');
-      if (opt === '1') {
-        var listaTxt = fences.map(function(f, i){ return (i+1) + '. ' + f.nombre; }).join('\n');
-        var sel = Number(prompt('Selecciona el número a eliminar:\n\n' + listaTxt));
-        if (sel && fences[sel-1]) {
-          fetch(DB + '/geocercas/' + fences[sel-1].id + '.json', { method: 'DELETE' });
-        }
-      }
-    };
-
-    // Clic en el mapa en modo manual cambia la posición del usuario en Firebase
     map.on('click', function (e) {
-      if (currentMode === 'manual') {
+      if (currentMode === 'manual' && !isDrawing) {
         putJSON('/usuario_activo.json', {
           latitude: e.latlng.lat,
           longitude: e.latlng.lng,
           timestamp: Date.now(),
           modo: 'manual'
         });
+        return;
+      }
+
+      if (isDrawing) {
+        drawPoints.push(e.latlng);
+        var m = L.circleMarker(e.latlng, { radius: 6, color: '#e5484d', fillColor: '#ff8080', fillOpacity: 1 }).addTo(map);
+        tempMarkers.push(m);
+
+        if (tempPolyline) map.removeLayer(tempPolyline);
+        if (drawPoints.length > 1) {
+          tempPolyline = L.polyline(drawPoints, { color: '#e5484d', weight: 3 }).addTo(map);
+        }
+
+        $('drawInfo').textContent = 'Puntos: ' + drawPoints.length + ' (mínimo 3)';
+        $('btnFinish.disabled', false);
+        if (drawPoints.length >= 3) { $('btnFinish').removeAttribute('disabled'); }
       }
     });
 
-    map.on('dragstart', function () { followUser = false; });
+    $('btnUndo').onclick = function () {
+      if (drawPoints.length > 0) {
+        drawPoints.pop();
+        var m = tempMarkers.pop();
+        if (m) map.removeLayer(m);
+        if (tempPolyline) map.removeLayer(tempPolyline);
+        if (drawPoints.length > 1) {
+          tempPolyline = L.polyline(drawPoints, { color: '#e5484d', weight: 3 }).addTo(map);
+        }
+        $('drawInfo').textContent = 'Puntos: ' + drawPoints.length + ' (mínimo 3)';
+        if (drawPoints.length < 3) { $('btnFinish').setAttribute('disabled', 'true'); }
+      }
+    };
+
+    $('btnCancel').onclick = function () {
+      cleanupDrawing();
+    };
+
+    $('btnFinish').onclick = function () {
+      if (drawPoints.length < 3) return;
+      var nom = prompt('Nombre de la zona dibujada:', 'Zona Polígono Web');
+      if (!nom) return;
+
+      // Calcular centro promedio del polígono y radio aproximado
+      var sumLat = 0, sumLng = 0;
+      drawPoints.forEach(function(p){ sumLat += p.lat; sumLng += p.lng; });
+      var centerLat = sumLat / drawPoints.length;
+      var centerLng = sumLng / drawPoints.length;
+      var maxDist = 50;
+      drawPoints.forEach(function(p){
+        var d = map.distance([centerLat, centerLng], p);
+        if (d > maxDist) maxDist = d;
+      });
+
+      fetch(DB + '/geocercas.json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: nom, latitude: centerLat, longitude: centerLng, radio: Math.round(maxDist) })
+      }).then(function() {
+        alert('¡Zona dibujada guardada con éxito!');
+        cleanupDrawing();
+      });
+    };
+
+    function cleanupDrawing() {
+      isDrawing = false;
+      $('drawPanel').classList.remove('active');
+      tempMarkers.forEach(function(m){ map.removeLayer(m); });
+      tempMarkers = [];
+      if (tempPolyline) { map.removeLayer(tempPolyline); tempPolyline = null; }
+      drawPoints = [];
+    }
+
+    map.on('dragstart', function () {
+      if (followUser) {
+        followUser = false;
+        $('btnFollow').textContent = 'Seguir: Pausado';
+        $('btnFollow').classList.add('off');
+      }
+    });
 
     setInterval(refreshConn, 1000);
     tick();
