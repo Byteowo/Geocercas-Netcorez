@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Diálogos con estilo Frutiger Aero: fondo de vidrio redondeado y acento azul -->
+    <style name="GeocorezDialog" parent="Theme.AppCompat.Light.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/bg_dialog_glass</item>
+        <item name="android:textColorPrimary">@color/aero_deep</item>
+        <item name="android:textColorSecondary">@color/aero_text_soft</item>
+        <item name="colorAccent">@color/aero_blue_dark</item>
+    </style>
+</resources>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <gradient android:angle="270" android:startColor="#FF3FCFC4" android:endColor="#FF0C7F79" />
+                    <corners android:radius="24dp" />
+                    <stroke android:width="1.5dp" android:color="#CCFFFFFF" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+    <item>
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <gradient android:angle="270" android:startColor="#FF6BF0E3" android:endColor="#FF14A8A0" />
+                    <corners android:radius="24dp" />
+                    <stroke android:width="1.5dp" android:color="#E6FFFFFF" />
+                </shape>
+            </item>
+            <!-- Brillo superior (efecto "gel") -->
+            <item android:top="3dp" android:left="12dp" android:right="12dp"
+                  android:height="16dp" android:gravity="top">
+                <shape android:shape="rectangle">
+                    <gradient android:angle="270" android:startColor="#B3FFFFFF" android:endColor="#1AFFFFFF" />
+                    <corners android:radius="12dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</selector>

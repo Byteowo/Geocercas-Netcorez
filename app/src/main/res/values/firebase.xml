@@ -1,0 +1,3 @@
+<resources>
+    <string name="firebase_database_url" translatable="false">https://geocorez-default-rtdb.firebaseio.com</string>
+</resources>
