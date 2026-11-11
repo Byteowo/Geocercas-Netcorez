@@ -1,162 +1,162 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mapa en tiempo real · Geocorez</title>
-<meta name="description" content="Seguimiento en tiempo real de la ubicación y las geocercas de Geocorez.">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<style>
-  :root {
-    --deep: #0b4f6c;
-    --soft: #2b6f8a;
-    --blue-top: #7fd6ff;
-    --blue-bottom: #1e9be8;
-    --green-top: #b8f26b;
-    --green-bottom: #3fae2a;
-    --ok: #35b82a;
-    --warn: #f0a30a;
-    --bad: #e5484d;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; }
-  body {
-    min-height: 100vh;
-    font-family: "Segoe UI", "Frutiger", "Trebuchet MS", system-ui, -apple-system, sans-serif;
-    color: var(--deep);
-    background:
-      radial-gradient(900px 500px at 12% -8%, rgba(255,255,255,.95), rgba(255,255,255,0) 60%),
-      linear-gradient(180deg, #8fd8ff 0%, #d9f4ff 48%, #e6fadb 100%);
-    background-attachment: fixed;
-  }
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mapa en tiempo real · Geocorez</title>
+  <meta name="description" content="Seguimiento en tiempo real de la ubicación y las geocercas de Geocorez.">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <style>
+    :root {
+      --deep: #0b4f6c;
+      --soft: #2b6f8a;
+      --blue-top: #7fd6ff;
+      --blue-bottom: #1e9be8;
+      --green-top: #b8f26b;
+      --green-bottom: #3fae2a;
+      --ok: #35b82a;
+      --warn: #f0a30a;
+      --bad: #e5484d;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      min-height: 100vh;
+      font-family: "Segoe UI", "Frutiger", "Trebuchet MS", system-ui, -apple-system, sans-serif;
+      color: var(--deep);
+      background:
+              radial-gradient(900px 500px at 12% -8%, rgba(255,255,255,.95), rgba(255,255,255,0) 60%),
+              linear-gradient(180deg, #8fd8ff 0%, #d9f4ff 48%, #e6fadb 100%);
+      background-attachment: fixed;
+    }
 
-  /* Burbujas decorativas */
-  .bubbles { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
-  .bubbles i {
-    position: absolute; border-radius: 50%;
-    background: radial-gradient(circle at 30% 28%, rgba(255,255,255,.95), rgba(255,255,255,.25) 45%, rgba(255,255,255,.08) 70%);
-    border: 1px solid rgba(255,255,255,.7);
-    box-shadow: inset 0 -6px 14px rgba(120,200,240,.35);
-  }
-  .bubbles i:nth-child(1) { width: 220px; height: 220px; left: -60px; top: 18%; }
-  .bubbles i:nth-child(2) { width: 120px; height: 120px; right: 6%; top: 8%; }
-  .bubbles i:nth-child(3) { width: 90px; height: 90px; right: 22%; bottom: 10%; }
-  .bubbles i:nth-child(4) { width: 160px; height: 160px; left: 30%; bottom: -50px; }
-  .bubbles i:nth-child(5) { width: 54px; height: 54px; left: 12%; top: 6%; }
+    /* Burbujas decorativas */
+    .bubbles { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+    .bubbles i {
+      position: absolute; border-radius: 50%;
+      background: radial-gradient(circle at 30% 28%, rgba(255,255,255,.95), rgba(255,255,255,.25) 45%, rgba(255,255,255,.08) 70%);
+      border: 1px solid rgba(255,255,255,.7);
+      box-shadow: inset 0 -6px 14px rgba(120,200,240,.35);
+    }
+    .bubbles i:nth-child(1) { width: 220px; height: 220px; left: -60px; top: 18%; }
+    .bubbles i:nth-child(2) { width: 120px; height: 120px; right: 6%; top: 8%; }
+    .bubbles i:nth-child(3) { width: 90px; height: 90px; right: 22%; bottom: 10%; }
+    .bubbles i:nth-child(4) { width: 160px; height: 160px; left: 30%; bottom: -50px; }
+    .bubbles i:nth-child(5) { width: 54px; height: 54px; left: 12%; top: 6%; }
 
-  .app { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 16px; }
+    .app { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 16px; }
 
-  /* Vidrio */
-  .glass {
-    background: linear-gradient(180deg, rgba(255,255,255,.88), rgba(205,239,255,.68));
-    border: 1.5px solid rgba(255,255,255,.95);
-    border-radius: 20px;
-    box-shadow: 0 10px 28px rgba(20,100,150,.22), inset 0 1px 0 #fff;
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-  }
+    /* Vidrio */
+    .glass {
+      background: linear-gradient(180deg, rgba(255,255,255,.88), rgba(205,239,255,.68));
+      border: 1.5px solid rgba(255,255,255,.95);
+      border-radius: 20px;
+      box-shadow: 0 10px 28px rgba(20,100,150,.22), inset 0 1px 0 #fff;
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+    }
 
-  /* Cabecera */
-  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; margin-bottom: 16px; }
-  .brand { display: flex; align-items: center; gap: 12px; }
-  .orb {
-    width: 38px; height: 38px; border-radius: 50%; flex: none;
-    background: radial-gradient(circle at 32% 28%, #f4ffd9 0%, #8fe04a 38%, #2fb52a 100%);
-    border: 2px solid #fff;
-    box-shadow: 0 4px 10px rgba(30,120,40,.35), inset 0 -4px 8px rgba(20,100,20,.25);
-  }
-  h1 { margin: 0; font-size: 1.35rem; line-height: 1.1; letter-spacing: .2px; }
-  .brand p { margin: 2px 0 0; font-size: .8rem; color: var(--soft); }
+    /* Cabecera */
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; margin-bottom: 16px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .orb {
+      width: 38px; height: 38px; border-radius: 50%; flex: none;
+      background: radial-gradient(circle at 32% 28%, #f4ffd9 0%, #8fe04a 38%, #2fb52a 100%);
+      border: 2px solid #fff;
+      box-shadow: 0 4px 10px rgba(30,120,40,.35), inset 0 -4px 8px rgba(20,100,20,.25);
+    }
+    h1 { margin: 0; font-size: 1.35rem; line-height: 1.1; letter-spacing: .2px; }
+    .brand p { margin: 2px 0 0; font-size: .8rem; color: var(--soft); }
 
-  .pill {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 8px 14px; border-radius: 999px; font-size: .85rem; font-weight: 600;
-    background: rgba(255,255,255,.8); border: 1.5px solid #fff;
-    box-shadow: inset 0 1px 0 #fff, 0 2px 6px rgba(20,100,150,.18);
-  }
-  .dot { width: 11px; height: 11px; border-radius: 50%; background: #9aa9b2; box-shadow: 0 0 0 3px rgba(154,169,178,.25); }
-  .pill.live .dot { background: var(--ok); box-shadow: 0 0 0 3px rgba(53,184,42,.28); }
-  .pill.stale .dot { background: var(--warn); box-shadow: 0 0 0 3px rgba(240,163,10,.28); }
-  .pill.off .dot { background: var(--bad); box-shadow: 0 0 0 3px rgba(229,72,77,.25); }
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 14px; border-radius: 999px; font-size: .85rem; font-weight: 600;
+      background: rgba(255,255,255,.8); border: 1.5px solid #fff;
+      box-shadow: inset 0 1px 0 #fff, 0 2px 6px rgba(20,100,150,.18);
+    }
+    .dot { width: 11px; height: 11px; border-radius: 50%; background: #9aa9b2; box-shadow: 0 0 0 3px rgba(154,169,178,.25); }
+    .pill.live .dot { background: var(--ok); box-shadow: 0 0 0 3px rgba(53,184,42,.28); }
+    .pill.stale .dot { background: var(--warn); box-shadow: 0 0 0 3px rgba(240,163,10,.28); }
+    .pill.off .dot { background: var(--bad); box-shadow: 0 0 0 3px rgba(229,72,77,.25); }
 
-  /* Distribución */
-  .layout { display: grid; grid-template-columns: 1fr 350px; gap: 16px; height: calc(100vh - 118px); min-height: 540px; }
-  .mapwrap { position: relative; overflow: hidden; padding: 6px; }
-  #map { width: 100%; height: 100%; border-radius: 15px; background: #cfeaf7; }
-  .mapbtns { position: absolute; right: 18px; top: 18px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
-  .side { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding: 2px; min-height: 0; }
-  .card { padding: 16px 18px; }
-  h2 { margin: 0 0 10px; font-size: .95rem; text-transform: uppercase; letter-spacing: .8px; color: var(--soft); }
+    /* Distribución */
+    .layout { display: grid; grid-template-columns: 1fr 350px; gap: 16px; height: calc(100vh - 118px); min-height: 540px; }
+    .mapwrap { position: relative; overflow: hidden; padding: 6px; }
+    #map { width: 100%; height: 100%; border-radius: 15px; background: #cfeaf7; }
+    .mapbtns { position: absolute; right: 18px; top: 18px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
+    .side { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding: 2px; min-height: 0; }
+    .card { padding: 16px 18px; }
+    h2 { margin: 0 0 10px; font-size: .95rem; text-transform: uppercase; letter-spacing: .8px; color: var(--soft); }
 
-  /* Botones tipo gel */
-  .btn {
-    position: relative; overflow: hidden; cursor: pointer;
-    padding: 10px 20px; min-width: 128px; border-radius: 999px;
-    border: 1.5px solid #fff; color: #fff; font: 600 .85rem "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
-    text-shadow: 0 1px 2px rgba(0,74,115,.6);
-    background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom));
-    box-shadow: 0 4px 10px rgba(20,100,150,.35), inset 0 -2px 4px rgba(0,60,110,.2);
-  }
-  .btn::before {
-    content: ""; position: absolute; left: 10%; right: 10%; top: 3px; height: 45%;
-    border-radius: 999px; pointer-events: none;
-    background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.08));
-  }
-  .btn.green { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); text-shadow: 0 1px 2px rgba(36,107,20,.6); }
-  .btn.off { background: linear-gradient(180deg, #d9e6ee, #9db4c2); text-shadow: 0 1px 2px rgba(40,70,90,.5); }
-  .btn:hover { filter: brightness(1.06); }
-  .btn:active { transform: translateY(1px); filter: brightness(.95); }
-  .btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px var(--blue-bottom); }
+    /* Botones tipo gel */
+    .btn {
+      position: relative; overflow: hidden; cursor: pointer;
+      padding: 10px 20px; min-width: 128px; border-radius: 999px;
+      border: 1.5px solid #fff; color: #fff; font: 600 .85rem "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+      text-shadow: 0 1px 2px rgba(0,74,115,.6);
+      background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom));
+      box-shadow: 0 4px 10px rgba(20,100,150,.35), inset 0 -2px 4px rgba(0,60,110,.2);
+    }
+    .btn::before {
+      content: ""; position: absolute; left: 10%; right: 10%; top: 3px; height: 45%;
+      border-radius: 999px; pointer-events: none;
+      background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.08));
+    }
+    .btn.green { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); text-shadow: 0 1px 2px rgba(36,107,20,.6); }
+    .btn.off { background: linear-gradient(180deg, #d9e6ee, #9db4c2); text-shadow: 0 1px 2px rgba(40,70,90,.5); }
+    .btn:hover { filter: brightness(1.06); }
+    .btn:active { transform: translateY(1px); filter: brightness(.95); }
+    .btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px var(--blue-bottom); }
 
-  /* Datos */
-  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; }
-  dt { color: var(--soft); font-size: .85rem; }
-  dd { margin: 0; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    /* Datos */
+    dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; }
+    dt { color: var(--soft); font-size: .85rem; }
+    dd { margin: 0; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
-  .list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-  .list li {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 9px 12px; border-radius: 14px; font-size: .88rem;
-    background: rgba(255,255,255,.7); border: 1px solid rgba(255,255,255,.95);
-  }
-  .list .name { font-weight: 700; overflow-wrap: anywhere; }
-  .list .meta { display: block; font-weight: 400; font-size: .75rem; color: var(--soft); }
-  .list .empty { justify-content: center; color: var(--soft); }
-  .chip { flex: none; padding: 3px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
-  .chip.in { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); }
-  .chip.out { background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom)); }
-  .status-line { font-weight: 700; }
+    .list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .list li {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 9px 12px; border-radius: 14px; font-size: .88rem;
+      background: rgba(255,255,255,.7); border: 1px solid rgba(255,255,255,.95);
+    }
+    .list .name { font-weight: 700; overflow-wrap: anywhere; }
+    .list .meta { display: block; font-weight: 400; font-size: .75rem; color: var(--soft); }
+    .list .empty { justify-content: center; color: var(--soft); }
+    .chip { flex: none; padding: 3px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
+    .chip.in { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); }
+    .chip.out { background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom)); }
+    .status-line { font-weight: 700; }
 
-  /* Marcador */
-  .pin { position: relative; width: 28px; height: 28px; }
-  .pin span {
-    position: absolute; inset: 4px; border-radius: 50%;
-    background: radial-gradient(circle at 32% 28%, #f4ffd9 0%, #8fe04a 40%, #2fb52a 100%);
-    border: 2.5px solid #fff; box-shadow: 0 3px 8px rgba(0,60,20,.45);
-  }
-  .pin::after {
-    content: ""; position: absolute; inset: 0; border-radius: 50%;
-    border: 2px solid rgba(53,184,42,.7); animation: pulse 2s ease-out infinite;
-  }
-  @keyframes pulse { 0% { transform: scale(.7); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .pin::after { animation: none; opacity: 0; } }
+    /* Marcador */
+    .pin { position: relative; width: 28px; height: 28px; }
+    .pin span {
+      position: absolute; inset: 4px; border-radius: 50%;
+      background: radial-gradient(circle at 32% 28%, #f4ffd9 0%, #8fe04a 40%, #2fb52a 100%);
+      border: 2.5px solid #fff; box-shadow: 0 3px 8px rgba(0,60,20,.45);
+    }
+    .pin::after {
+      content: ""; position: absolute; inset: 0; border-radius: 50%;
+      border: 2px solid rgba(53,184,42,.7); animation: pulse 2s ease-out infinite;
+    }
+    @keyframes pulse { 0% { transform: scale(.7); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .pin::after { animation: none; opacity: 0; } }
 
-  .leaflet-tooltip.fence-label {
-    background: rgba(255,255,255,.92); border: 1px solid #fff; border-radius: 10px;
-    color: var(--deep); font-weight: 700; box-shadow: 0 2px 8px rgba(20,100,150,.3);
-  }
-  .leaflet-container a { color: var(--blue-bottom); }
+    .leaflet-tooltip.fence-label {
+      background: rgba(255,255,255,.92); border: 1px solid #fff; border-radius: 10px;
+      color: var(--deep); font-weight: 700; box-shadow: 0 2px 8px rgba(20,100,150,.3);
+    }
+    .leaflet-container a { color: var(--blue-bottom); }
 
-  footer { text-align: center; font-size: .75rem; color: var(--soft); margin-top: 14px; }
+    footer { text-align: center; font-size: .75rem; color: var(--soft); margin-top: 14px; }
 
-  /* Móvil */
-  @media (max-width: 860px) {
-    .layout { grid-template-columns: 1fr; height: auto; }
-    .mapwrap { height: 58vh; min-height: 340px; }
-    .side { overflow: visible; }
-    .topbar { flex-wrap: wrap; }
-  }
-</style>
+    /* Móvil */
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; height: auto; }
+      .mapwrap { height: 58vh; min-height: 340px; }
+      .side { overflow: visible; }
+      .topbar { flex-wrap: wrap; }
+    }
+  </style>
 </head>
 <body>
 <div class="bubbles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
@@ -208,272 +208,267 @@
     </aside>
   </main>
 
-  <footer>Geocorez · Seguimiento en tiempo real con Firebase y OpenStreetMap</footer>
+  <footer>Geocorez · Seguimiento en tiempo real con Mapbox y Firebase</footer>
 </div>
 
 <noscript>Esta página necesita JavaScript para mostrar el mapa.</noscript>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-(function () {
-  'use strict';
+  (function () {
+    'use strict';
 
-  // Base de datos de Firebase (la misma que usa la app)
-  var DB = 'https://geocorez-default-rtdb.firebaseio.com';
-  var POLL_MS = 2000;        // ubicación y geocercas
-  var EVENTS_MS = 5000;      // eventos
-  var STALE_MS = 30000;      // sin datos nuevos => "Sin señal reciente"
+    // Base de datos de Firebase
+    var DB = 'https://geocorez-default-rtdb.firebaseio.com';
+    var POLL_MS = 2000;
+    var EVENTS_MS = 5000;
+    var STALE_MS = 30000;
 
-  var COLOR_IN = '#35b82a';
-  var COLOR_OUT = '#1e9be8';
+    var COLOR_IN = '#35b82a';
+    var COLOR_OUT = '#1e9be8';
 
-  var $ = function (id) { return document.getElementById(id); };
+    var $ = function (id) { return document.getElementById(id); };
 
-  // ----- Mapa -----
-  var map = L.map('map').setView([-16.5, -68.15], 13);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19,
-    subdomains: 'abcd',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-  }).addTo(map);
+    // ----- Mapa con Mapbox -----
+    var map = L.map('map').setView([-16.5, -68.15], 13);
 
-  var pinIcon = L.divIcon({
-    className: '',
-    html: '<div class="pin"><span></span></div>',
-    iconSize: [28, 28],
-    iconAnchor: [14, 14]
-  });
+    var MAPBOX_TOKEN = 'pk.eyJ1IjoieW9zaGljb3JlIiwiYSI6ImNtd2NvcTFobTA0bW4zMG85cG9mc2E2cWwifQ.L6gUJs7fyQ_ewHSXad6TLw';
 
-  var marker = null;
-  var follow = true;
-  var firstFix = true;
-  var lastPos = null;       // [lat, lng]
-  var lastTs = 0;           // marca de tiempo enviada por el teléfono
-  var connected = false;
-  var fences = [];          // [{id, nombre, lat, lng, radio}]
-  var fenceLayers = {};     // id -> L.circle
-  var fencesKey = '';
+    L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}{r}?access_token=' + MAPBOX_TOKEN, {
+      tileSize: 512,
+      zoomOffset: -1,
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.mapbox.com/">Mapbox</a>'
+    }).addTo(map);
 
-  // ----- Utilidades -----
-  function getJSON(path) {
-    var ctl = new AbortController();
-    var timer = setTimeout(function () { ctl.abort(); }, 6000);
-    return fetch(DB + path, { cache: 'no-store', signal: ctl.signal })
-      .then(function (r) {
-        if (!r.ok) { throw new Error('HTTP ' + r.status); }
-        return r.json();
-      })
-      .finally(function () { clearTimeout(timer); });
-  }
+    var pinIcon = L.divIcon({
+      className: '',
+      html: '<div class="pin"><span></span></div>',
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
 
-  function num(v) {
-    var n = Number(v);
-    return isFinite(n) ? n : null;
-  }
+    var marker = null;
+    var follow = true;
+    var firstFix = true;
+    var lastPos = null;
+    var lastTs = 0;
+    var connected = false;
+    var fences = [];
+    var fenceLayers = {};
+    var fencesKey = '';
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) { e.className = cls; }
-    if (text !== undefined) { e.textContent = text; }
-    return e;
-  }
+    function getJSON(path) {
+      var ctl = new AbortController();
+      var timer = setTimeout(function () { ctl.abort(); }, 6000);
+      return fetch(DB + path, { cache: 'no-store', signal: ctl.signal })
+              .then(function (r) {
+                if (!r.ok) { throw new Error('HTTP ' + r.status); }
+                return r.json();
+              })
+              .finally(function () { clearTimeout(timer); });
+    }
 
-  function fmtAgo(ms) {
-    var s = Math.max(0, Math.round(ms / 1000));
-    if (s < 5) { return 'ahora'; }
-    if (s < 60) { return 'hace ' + s + ' s'; }
-    if (s < 3600) { return 'hace ' + Math.floor(s / 60) + ' min'; }
-    return 'hace ' + Math.floor(s / 3600) + ' h';
-  }
+    function num(v) {
+      var n = Number(v);
+      return isFinite(n) ? n : null;
+    }
 
-  function fmtDate(ts) {
-    var d = new Date(ts);
-    if (isNaN(d.getTime())) { return ''; }
-    return d.toLocaleString('es-BO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  }
+    function el(tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) { e.className = cls; }
+      if (text !== undefined) { e.textContent = text; }
+      return e;
+    }
 
-  // ----- Estado de conexión -----
-  function setConn(state, text) {
-    var pill = $('conn');
-    pill.className = 'pill ' + state;
-    $('connText').textContent = text;
-  }
+    function fmtAgo(ms) {
+      var s = Math.max(0, Math.round(ms / 1000));
+      if (s < 5) { return 'ahora'; }
+      if (s < 60) { return 'hace ' + s + ' s'; }
+      if (s < 3600) { return 'hace ' + Math.floor(s / 60) + ' min'; }
+      return 'hace ' + Math.floor(s / 3600) + ' h';
+    }
 
-  function refreshConn() {
-    if (!connected) { setConn('off', 'Sin conexión'); return; }
-    if (!lastTs) { setConn('stale', 'Esperando datos'); $('vAge').textContent = '—'; return; }
-    var age = Date.now() - lastTs;
-    $('vAge').textContent = fmtAgo(age);
-    if (age > STALE_MS) { setConn('stale', 'Sin señal reciente'); }
-    else { setConn('live', 'En vivo'); }
-  }
+    function fmtDate(ts) {
+      var d = new Date(ts);
+      if (isNaN(d.getTime())) { return ''; }
+      return d.toLocaleString('es-BO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
 
-  // ----- Ubicación -----
-  function renderUser(u) {
-    if (!u || typeof u !== 'object') { lastTs = 0; return; }
-    var lat = num(u.latitude), lng = num(u.longitude);
-    if (lat === null || lng === null) { return; }
+    function setConn(state, text) {
+      var pill = $('conn');
+      pill.className = 'pill ' + state;
+      $('connText').textContent = text;
+    }
 
-    lastPos = [lat, lng];
-    lastTs = num(u.timestamp) || 0;
+    function refreshConn() {
+      if (!connected) { setConn('off', 'Sin conexión'); return; }
+      if (!lastTs) { setConn('stale', 'Esperando datos'); $('vAge').textContent = '—'; return; }
+      var age = Date.now() - lastTs;
+      $('vAge').textContent = fmtAgo(age);
+      if (age > STALE_MS) { setConn('stale', 'Sin señal reciente'); }
+      else { setConn('live', 'En vivo'); }
+    }
 
-    if (!marker) { marker = L.marker(lastPos, { icon: pinIcon, keyboard: false }).addTo(map); }
-    else { marker.setLatLng(lastPos); }
+    function renderUser(u) {
+      if (!u || typeof u !== 'object') { lastTs = 0; return; }
+      var lat = num(u.latitude), lng = num(u.longitude);
+      if (lat === null || lng === null) { return; }
 
-    if (firstFix) { map.setView(lastPos, 16); firstFix = false; }
-    else if (follow) { map.panTo(lastPos, { animate: true }); }
+      lastPos = [lat, lng];
+      lastTs = num(u.timestamp) || 0;
 
-    $('vLat').textContent = lat.toFixed(6);
-    $('vLng').textContent = lng.toFixed(6);
-    $('vMode').textContent = u.modo === 'manual' ? 'Manual' : 'GPS';
-    updateFenceState();
-  }
+      if (!marker) { marker = L.marker(lastPos, { icon: pinIcon, keyboard: false }).addTo(map); }
+      else { marker.setLatLng(lastPos); }
 
-  // ----- Geocercas -----
-  function insideOf(f) {
-    return !!lastPos && map.distance(lastPos, [f.lat, f.lng]) <= f.radio;
-  }
+      if (firstFix) { map.setView(lastPos, 16); firstFix = false; }
+      else if (follow) { map.panTo(lastPos, { animate: true }); }
 
-  function renderFences(g) {
-    var list = [];
-    if (g && typeof g === 'object') {
-      Object.keys(g).forEach(function (id) {
-        var v = g[id];
-        if (!v || typeof v !== 'object') { return; }
-        var lat = num(v.latitude), lng = num(v.longitude), r = num(v.radio);
-        if (lat === null || lng === null || r === null) { return; }
-        list.push({
-          id: id,
-          nombre: String(v.nombre || 'Geocerca').slice(0, 60),
-          lat: lat,
-          lng: lng,
-          radio: Math.min(Math.max(r, 1), 1000000)
+      $('vLat').textContent = lat.toFixed(6);
+      $('vLng').textContent = lng.toFixed(6);
+      $('vMode').textContent = u.modo === 'manual' ? 'Manual' : 'GPS';
+      updateFenceState();
+    }
+
+    function insideOf(f) {
+      return !!lastPos && map.distance(lastPos, [f.lat, f.lng]) <= f.radio;
+    }
+
+    function renderFences(g) {
+      var list = [];
+      if (g && typeof g === 'object') {
+        Object.keys(g).forEach(function (id) {
+          var v = g[id];
+          if (!v || typeof v !== 'object') { return; }
+          var lat = num(v.latitude), lng = num(v.longitude), r = num(v.radio);
+          if (lat === null || lng === null || r === null) { return; }
+          list.push({
+            id: id,
+            nombre: String(v.nombre || 'Geocerca').slice(0, 60),
+            lat: lat,
+            lng: lng,
+            radio: Math.min(Math.max(r, 1), 1000000)
+          });
         });
-      });
-    }
-    var key = JSON.stringify(list);
-    if (key !== fencesKey) {
-      fencesKey = key;
-      fences = list;
-      // Redibuja los círculos solo si cambió algo
-      Object.keys(fenceLayers).forEach(function (id) { map.removeLayer(fenceLayers[id]); });
-      fenceLayers = {};
-      fences.forEach(function (f) {
-        var c = L.circle([f.lat, f.lng], { radius: f.radio, weight: 2, fillOpacity: .22 }).addTo(map);
-        var tip = document.createElement('span');
-        tip.textContent = f.nombre + ' · ' + Math.round(f.radio) + ' m';
-        c.bindTooltip(tip, { direction: 'top', className: 'fence-label' });
-        fenceLayers[f.id] = c;
-      });
-    }
-    updateFenceState();
-  }
-
-  function updateFenceState() {
-    var ul = $('fenceList');
-    ul.replaceChildren();
-    var inside = [];
-
-    fences.forEach(function (f) {
-      var dentro = insideOf(f);
-      if (dentro) { inside.push(f.nombre); }
-
-      var layer = fenceLayers[f.id];
-      if (layer) {
-        var color = dentro ? COLOR_IN : COLOR_OUT;
-        layer.setStyle({ color: color, fillColor: color });
       }
-
-      var li = el('li');
-      var left = el('div');
-      left.appendChild(el('span', 'name', f.nombre));
-      left.appendChild(el('span', 'meta', 'Radio: ' + Math.round(f.radio) + ' m'));
-      li.appendChild(left);
-      li.appendChild(el('span', 'chip ' + (dentro ? 'in' : 'out'), dentro ? 'Dentro' : 'Fuera'));
-      ul.appendChild(li);
-    });
-
-    if (!fences.length) {
-      var empty = el('li', 'empty', 'Aún no hay geocercas creadas');
-      ul.appendChild(empty);
-      $('fenceStatus').textContent = 'Sin geocercas';
-    } else if (!lastPos) {
-      $('fenceStatus').textContent = 'Esperando ubicación…';
-    } else if (inside.length) {
-      $('fenceStatus').textContent = 'Dentro de: ' + inside.join(', ');
-    } else {
-      $('fenceStatus').textContent = 'Fuera de todas las geocercas';
+      var key = JSON.stringify(list);
+      if (key !== fencesKey) {
+        fencesKey = key;
+        fences = list;
+        Object.keys(fenceLayers).forEach(function (id) { map.removeLayer(fenceLayers[id]); });
+        fenceLayers = {};
+        fences.forEach(function (f) {
+          var c = L.circle([f.lat, f.lng], { radius: f.radio, weight: 2, fillOpacity: .22 }).addTo(map);
+          var tip = document.createElement('span');
+          tip.textContent = f.nombre + ' · ' + Math.round(f.radio) + ' m';
+          c.bindTooltip(tip, { direction: 'top', className: 'fence-label' });
+          fenceLayers[f.id] = c;
+        });
+      }
+      updateFenceState();
     }
-  }
 
-  // ----- Eventos -----
-  function renderEvents(obj) {
-    var ul = $('eventList');
-    ul.replaceChildren();
-    var items = [];
-    if (obj && typeof obj === 'object') {
-      Object.keys(obj).forEach(function (k) {
-        if (obj[k] && typeof obj[k] === 'object') { items.push({ k: k, v: obj[k] }); }
+    function updateFenceState() {
+      var ul = $('fenceList');
+      ul.replaceChildren();
+      var inside = [];
+
+      fences.forEach(function (f) {
+        var dentro = insideOf(f);
+        if (dentro) { inside.push(f.nombre); }
+
+        var layer = fenceLayers[f.id];
+        if (layer) {
+          var color = dentro ? COLOR_IN : COLOR_OUT;
+          layer.setStyle({ color: color, fillColor: color });
+        }
+
+        var li = el('li');
+        var left = el('div');
+        left.appendChild(el('span', 'name', f.nombre));
+        left.appendChild(el('span', 'meta', 'Radio: ' + Math.round(f.radio) + ' m'));
+        li.appendChild(left);
+        li.appendChild(el('span', 'chip ' + (dentro ? 'in' : 'out'), dentro ? 'Dentro' : 'Fuera'));
+        ul.appendChild(li);
+      });
+
+      if (!fences.length) {
+        var empty = el('li', 'empty', 'Aún no hay geocercas creadas');
+        ul.appendChild(empty);
+        $('fenceStatus').textContent = 'Sin geocercas';
+      } else if (!lastPos) {
+        $('fenceStatus').textContent = 'Esperando ubicación…';
+      } else if (inside.length) {
+        $('fenceStatus').textContent = 'Dentro de: ' + inside.join(', ');
+      } else {
+        $('fenceStatus').textContent = 'Fuera de todas las geocercas';
+      }
+    }
+
+    function renderEvents(obj) {
+      var ul = $('eventList');
+      ul.replaceChildren();
+      var items = [];
+      if (obj && typeof obj === 'object') {
+        Object.keys(obj).forEach(function (k) {
+          if (obj[k] && typeof obj[k] === 'object') { items.push({ k: k, v: obj[k] }); }
+        });
+      }
+      items.sort(function (a, b) { return a.k < b.k ? 1 : -1; });
+
+      if (!items.length) {
+        ul.appendChild(el('li', 'empty', 'Sin eventos todavía'));
+        return;
+      }
+      items.forEach(function (it) {
+        var entrada = it.v.evento === 'entrada';
+        var li = el('li');
+        var left = el('div');
+        left.appendChild(el('span', 'name', String(it.v.geocerca || 'Geocerca').slice(0, 60)));
+        left.appendChild(el('span', 'meta', fmtDate(num(it.v.timestamp))));
+        li.appendChild(left);
+        li.appendChild(el('span', 'chip ' + (entrada ? 'in' : 'out'), entrada ? 'Entrada' : 'Salida'));
+        ul.appendChild(li);
       });
     }
-    items.sort(function (a, b) { return a.k < b.k ? 1 : -1; });
 
-    if (!items.length) {
-      ul.appendChild(el('li', 'empty', 'Sin eventos todavía'));
-      return;
+    function tick() {
+      Promise.all([getJSON('/usuario_activo.json'), getJSON('/geocercas.json')])
+              .then(function (res) {
+                connected = true;
+                renderUser(res[0]);
+                renderFences(res[1]);
+              })
+              .catch(function () { connected = false; })
+              .finally(function () { refreshConn(); setTimeout(tick, POLL_MS); });
     }
-    items.forEach(function (it) {
-      var entrada = it.v.evento === 'entrada';
-      var li = el('li');
-      var left = el('div');
-      left.appendChild(el('span', 'name', String(it.v.geocerca || 'Geocerca').slice(0, 60)));
-      left.appendChild(el('span', 'meta', fmtDate(num(it.v.timestamp))));
-      li.appendChild(left);
-      li.appendChild(el('span', 'chip ' + (entrada ? 'in' : 'out'), entrada ? 'Entrada' : 'Salida'));
-      ul.appendChild(li);
+
+    function tickEvents() {
+      getJSON('/eventos.json?orderBy=%22%24key%22&limitToLast=8')
+              .then(renderEvents)
+              .catch(function () { })
+              .finally(function () { setTimeout(tickEvents, EVENTS_MS); });
+    }
+
+    $('btnFollow').addEventListener('click', function () {
+      follow = !follow;
+      this.textContent = follow ? 'Siguiendo' : 'Seguir';
+      this.setAttribute('aria-pressed', String(follow));
+      this.classList.toggle('off', !follow);
+      if (follow && lastPos) { map.panTo(lastPos); }
     });
-  }
+    $('btnCenter').addEventListener('click', function () {
+      if (lastPos) { map.setView(lastPos, 16); }
+    });
+    map.on('dragstart', function () {
+      if (follow) { $('btnFollow').click(); }
+    });
 
-  // ----- Bucles de actualización -----
-  function tick() {
-    Promise.all([getJSON('/usuario_activo.json'), getJSON('/geocercas.json')])
-      .then(function (res) {
-        connected = true;
-        renderUser(res[0]);
-        renderFences(res[1]);
-      })
-      .catch(function () { connected = false; })
-      .finally(function () { refreshConn(); setTimeout(tick, POLL_MS); });
-  }
-
-  function tickEvents() {
-    getJSON('/eventos.json?orderBy=%22%24key%22&limitToLast=8')
-      .then(renderEvents)
-      .catch(function () { /* se reintenta en el siguiente ciclo */ })
-      .finally(function () { setTimeout(tickEvents, EVENTS_MS); });
-  }
-
-  // ----- Controles -----
-  $('btnFollow').addEventListener('click', function () {
-    follow = !follow;
-    this.textContent = follow ? 'Siguiendo' : 'Seguir';
-    this.setAttribute('aria-pressed', String(follow));
-    this.classList.toggle('off', !follow);
-    if (follow && lastPos) { map.panTo(lastPos); }
-  });
-  $('btnCenter').addEventListener('click', function () {
-    if (lastPos) { map.setView(lastPos, 16); }
-  });
-  // Si la persona mueve el mapa a mano, se deja de seguir
-  map.on('dragstart', function () {
-    if (follow) { $('btnFollow').click(); }
-  });
-
-  setInterval(refreshConn, 1000);
-  updateFenceState();
-  renderEvents(null);
-  tick();
-  tickEvents();
-})();
+    setInterval(refreshConn, 1000);
+    updateFenceState();
+    renderEvents(null);
+    tick();
+    tickEvents();
+  })();
 </script>
 </body>
 </html>
