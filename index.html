@@ -84,7 +84,7 @@
     .mapwrap { position: relative; overflow: hidden; padding: 6px; }
     #map { width: 100%; height: 100%; border-radius: 15px; background: #cfeaf7; }
 
-    /* Botones flotantes idénticos a los de la app móvil */
+    /* Botones flotantes interactivos */
     .mapbtns { position: absolute; right: 18px; top: 18px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
 
     .side { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding: 2px; min-height: 0; }
@@ -169,7 +169,7 @@
       <span class="orb" aria-hidden="true"></span>
       <div>
         <h1>Geocorez</h1>
-        <p>Mapa en tiempo real</p>
+        <p>Mapa en tiempo real (Control Web)</p>
       </div>
     </div>
     <div class="pill" id="conn" role="status" aria-live="polite">
@@ -181,13 +181,14 @@
     <section class="glass mapwrap">
       <div id="map" role="application" aria-label="Mapa con la ubicación en tiempo real"></div>
 
-      <!-- Botones flotantes funcionales -->
+      <!-- Botones de Control Web -->
       <div class="mapbtns">
+        <button class="btn" id="btnFollow" type="button">Seguir: Activo</button>
         <button class="btn" id="btnCenter" type="button">Centrar</button>
         <button class="btn green" id="btnMode" type="button">Modo: GPS</button>
-        <button class="btn green" id="btnCircle" type="button">+ Círculo</button>
+        <button class="btn green" id="btnCircle" type="button">+ Círculo aquí</button>
         <button class="btn green" id="btnDraw" type="button">Dibujar zona</button>
-        <button class="btn" id="btnGeofences" type="button">Geocercas</button>
+        <button class="btn" id="btnGeofences" type="button">Ver Geocercas</button>
       </div>
     </section>
 
@@ -215,7 +216,7 @@
     </aside>
   </main>
 
-  <footer>Geocorez · Seguimiento en tiempo real con Mapbox y Firebase</footer>
+  <footer>Geocorez · Control Web interactivo con Mapbox y Firebase</footer>
 </div>
 
 <noscript>Esta página necesita JavaScript para mostrar el mapa.</noscript>
@@ -234,11 +235,9 @@
 
     var $ = function (id) { return document.getElementById(id); };
 
-    // ----- Mapa configurado con Mapbox Oficial -----
     var map = L.map('map').setView([-16.5, -68.15], 13);
 
-    // Tu token público real de Mapbox
-    var MAPBOX_TOKEN = 'pk.eyJ1IjoieW9zaGljb3JlIiwiYSI6ImNtd2NvcTFobTA0bW4zMG85cG9mc2E2cWwifQ.L6gUJs7fyQ_ewHSXad6TLw';
+    var MAPBOX_TOKEN = 'pk.eyJ1IjoieW9zaGljb3JlIiwiYSI6ImNtd2NvcTFobTA0bW4zMG85cG9mc2E2cWwifQ.L6gUJs7fyQ_ewHSXad6TLw'; // Reemplaza por tu token real
 
     L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}{r}?access_token=' + MAPBOX_TOKEN, {
       tileSize: 512,
@@ -255,7 +254,7 @@
     });
 
     var marker = null;
-    var follow = true;
+    var followUser = true; // Control de movimiento libre en la web
     var lastPos = null;
     var lastTs = 0;
     var connected = false;
@@ -335,7 +334,10 @@
       if (!marker) { marker = L.marker(lastPos, { icon: pinIcon, keyboard: false }).addTo(map); }
       else { marker.setLatLng(lastPos); }
 
-      if (follow && lastPos) { map.panTo(lastPos, { animate: true }); }
+      // Solo mueve la cámara automáticamente si el usuario web tiene activado el seguimiento
+      if (followUser && lastPos) {
+        map.panTo(lastPos, { animate: true });
+      }
 
       $('vLat').textContent = lat.toFixed(6);
       $('vLng').textContent = lng.toFixed(6);
@@ -466,9 +468,16 @@
               .finally(function () { setTimeout(tickEvents, EVENTS_MS); });
     }
 
-    // ----- Funcionalidad Interactiva de los Botones -----
+    // ----- Controles Interactivos desde la Web -----
 
-    // 1. Centrar mapa en la posición actual
+    // Botón para alternar si la web sigue automáticamente al usuario o se mueve libremente
+    $('btnFollow').addEventListener('click', function () {
+      followUser = !followUser;
+      this.textContent = followUser ? 'Seguir: Activo' : 'Seguir: Pausado';
+      this.classList.toggle('off', !followUser);
+    });
+
+    // Centrar el mapa manualmente en la posición actual
     $('btnCenter').addEventListener('click', function () {
       if (lastPos) {
         map.setView(lastPos, 16, { animate: true });
@@ -477,7 +486,7 @@
       }
     });
 
-    // 2. Alternar modo entre GPS y Manual y actualizar Firebase
+    // Cambiar modo (GPS / Manual) directamente desde la web
     $('btnMode').addEventListener('click', function () {
       var nuevoModo = (currentMode === 'manual') ? 'GPS' : 'manual';
       putJSON('/usuario_activo.json', { modo: nuevoModo })
@@ -491,12 +500,12 @@
               });
     });
 
-    // 3. Crear nuevo círculo de geocerca en el centro del mapa actual
+    // Crear geocerca circular basada en el centro actual de la vista del mapa web
     $('btnCircle').addEventListener('click', function () {
       var center = map.getCenter();
-      var nombreGeocerca = prompt('Ingrese el nombre para la nueva geocerca circular:', 'Geocerca Web');
+      var nombreGeocerca = prompt('Nombre para la nueva geocerca creada desde la Web:', 'Geocerca Web');
       if (!nombreGeocerca) return;
-      var radioMetros = prompt('Ingrese el radio de la geocerca en metros:', '50');
+      var radioMetros = prompt('Radio de la geocerca en metros:', '100');
       var radioNum = Number(radioMetros);
       if (!radioNum || isNaN(radioNum)) return;
 
@@ -512,32 +521,63 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(nuevaGeocerca)
       })
-              .then(function(r) { return r.json(); })
               .then(function() {
-                alert('Geocerca circular creada con éxito.');
+                alert('¡Geocerca creada y guardada en Firebase desde la web exitosamente!');
               })
               .catch(function(err) {
-                alert('Error al crear geocerca: ' + err);
+                alert('Error al registrar geocerca: ' + err);
               });
     });
 
-    // 4. Dibujar zona / Notificación de delimitación
+    // Dibujar zona personalizada haciendo clic en el mapa
     $('btnDraw').addEventListener('click', function () {
-      alert('Haz clic en el mapa para registrar puntos de delimitación de zona personalizada (modo interactivo habilitado).');
+      alert('Modo de dibujo activado: Haz clic en cualquier lugar del mapa web para fijar el centro de una nueva zona.');
+
+      var tempListener = function(e) {
+        var lat = e.latlng.lat;
+        var lng = e.latlng.lng;
+        map.off('click', tempListener); // Desactivar tras el primer clic
+
+        var nombreZona = prompt('Punto fijado en (' + lat.toFixed(4) + ', ' + lng.toFixed(4) + '). Ingresa el nombre de la zona:', 'Zona Web');
+        if (!nombreZona) return;
+
+        var radioZona = prompt('Ingresa el radio en metros para esta zona:', '150');
+        var radioVal = Number(radioZona) || 100;
+
+        fetch(DB + '/geocercas.json', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nombre: nombreZona,
+            latitude: lat,
+            longitude: lng,
+            radio: radioVal
+          })
+        }).then(function() {
+          alert('¡Zona creada con éxito desde el mapa web!');
+        });
+      };
+
+      map.on('click', tempListener);
     });
 
-    // 5. Ver panel de administración de geocercas
+    // Ver lista de geocercas activas
     $('btnGeofences').addEventListener('click', function () {
       if (fences.length === 0) {
-        alert('No hay geocercas registradas actualmente en el sistema.');
+        alert('No hay geocercas registradas.');
       } else {
-        var nombres = fences.map(function(f) { return '• ' + f.nombre + ' (' + Math.round(f.radio) + 'm)'; }).join('\n');
-        alert('Geocercas activas en Geocorez:\n\n' + nombres);
+        var listado = fences.map(function(f) { return '• ' + f.nombre + ' (' + Math.round(f.radio) + 'm)'; }).join('\n');
+        alert('Geocercas en el sistema:\n\n' + listado);
       }
     });
 
+    // Si el usuario mueve el mapa manualmente con el mouse, se pausa automáticamente el seguimiento forzoso para darle libertad
     map.on('dragstart', function () {
-      follow = false;
+      if (followUser) {
+        followUser = false;
+        $('btnFollow').textContent = 'Seguir: Pausado';
+        $('btnFollow').classList.add('off');
+      }
     });
 
     setInterval(refreshConn, 1000);
