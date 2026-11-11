@@ -39,16 +39,22 @@ import com.mapbox.maps.plugin.annotation.generated.PointAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.PolygonAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.PolygonAnnotationOptions
+import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationManager
+import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createCircleAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.createPolygonAnnotationManager
+import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
 import com.mapbox.maps.plugin.gestures.OnMapClickListener
 import com.mapbox.maps.plugin.gestures.OnMapLongClickListener
 import com.mapbox.maps.plugin.gestures.gestures
 import com.mapbox.maps.plugin.locationcomponent.location
 // Firebase
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 // Utilidades
 import org.json.JSONArray
 import org.json.JSONObject
@@ -58,14 +64,23 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Una geocerca circular: centro (lat, lng) y radio en metros. */
+/**
+ * Una geocerca. Puede ser:
+ *  - "circulo": centro (lat, lng) y radio en metros.
+ *  - "poligono": zona de forma libre definida por [puntos] (lat, lng de cada vértice).
+ * En los polígonos, (lat, lng) guarda el centro aproximado y sirve para etiquetas y para "Ir a".
+ */
 data class Geocerca(
     val id: String,
     var nombre: String,
+    var tipo: String,
     var lat: Double,
     var lng: Double,
-    var radio: Double
-)
+    var radio: Double,
+    var puntos: MutableList<Point>
+) {
+    val esPoligono: Boolean get() = tipo == "poligono"
+}
 
 class MainActivity : AppCompatActivity() {
 
@@ -74,12 +89,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var latitudeTextView: TextView
     private lateinit var longitudeTextView: TextView
     private lateinit var geofenceStatusTextView: TextView
-    private lateinit var btnMode: Button
     private lateinit var modeTextView: TextView
+    private lateinit var drawHintTextView: TextView
+    private lateinit var drawPanel: View
+    private lateinit var btnMode: Button
     private lateinit var locationManager: LocationManager
 
     // Firebase (null si no se pudo inicializar: la app sigue funcionando sin subir datos)
     private var database: DatabaseReference? = null
+    private var geocercasListener: ValueEventListener? = null
+    private var primeraSincronizacion = true
 
     private val locationPermissionRequestCode = 1
     private val locationUpdateInterval = 1000L
@@ -99,8 +118,15 @@ class MainActivity : AppCompatActivity() {
     private val geocercas = mutableListOf<Geocerca>()
     private val dentroDe = mutableSetOf<String>() // ids de las geocercas donde estoy dentro
     private var polygonManager: PolygonAnnotationManager? = null
+    private var fenceLineManager: PolylineAnnotationManager? = null
     private var labelManager: PointAnnotationManager? = null
-    private var circleManager: CircleAnnotationManager? = null
+    private var circleManager: CircleAnnotationManager? = null // marcador del modo manual
+
+    // Dibujo de zonas
+    private var drawing = false
+    private val drawPoints = mutableListOf<Point>()
+    private var drawLineManager: PolylineAnnotationManager? = null
+    private var drawDotManager: CircleAnnotationManager? = null
 
     // ---------------------------------------------------------------- ciclo de vida
 
@@ -117,11 +143,18 @@ class MainActivity : AppCompatActivity() {
         geofenceStatusTextView = findViewById(R.id.geofenceStatusTextView)
         btnMode = findViewById(R.id.btnMode)
         modeTextView = findViewById(R.id.modeTextView)
+        drawHintTextView = findViewById(R.id.drawHintTextView)
+        drawPanel = findViewById(R.id.drawPanel)
         locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
 
         // Evita que los paneles queden debajo de las barras del sistema (edge-to-edge)
         val infoPanel = findViewById<View>(R.id.infoPanel)
         ViewCompat.setOnApplyWindowInsetsListener(infoPanel) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, bars.bottom)
+            insets
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(drawPanel) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, bars.bottom)
             insets
@@ -142,6 +175,7 @@ class MainActivity : AppCompatActivity() {
         initializeFirebase()
         cargarGeocercas()
         actualizarEstadoGeocercas()
+        escucharGeocercas()
         initializeLocationListener()
         setupButtons()
         setupMapGestures()
@@ -164,6 +198,11 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopLocationUpdates()
+        val l = geocercasListener
+        if (l != null) {
+            database?.child("geocercas")?.removeEventListener(l)
+        }
+        geocercasListener = null
         locationListener = null
         gpsDialog?.dismiss()
         gpsDialog = null
@@ -180,7 +219,6 @@ class MainActivity : AppCompatActivity() {
                 FirebaseDatabase.getInstance()
             }
             database = instance.reference
-            sincronizarGeocercasFirebase()
         } catch (e: Exception) {
             Log.e("Geocorez", "Firebase no se pudo inicializar: ${e.message}", e)
             toast("Firebase no configurado: no se enviará la ubicación")
@@ -201,22 +239,85 @@ class MainActivity : AppCompatActivity() {
         database?.child("usuario_activo")?.setValue(data)
     }
 
-    private fun sincronizarGeocercasFirebase() {
+    /** Convierte una geocerca al formato que se guarda en Firebase (lo mismo que lee la página web). */
+    private fun aMapa(g: Geocerca): Map<String, Any> {
+        val m = HashMap<String, Any>()
+        m["nombre"] = g.nombre
+        m["tipo"] = g.tipo
+        m["latitude"] = g.lat
+        m["longitude"] = g.lng
+        m["radio"] = g.radio
+        if (g.esPoligono) {
+            m["puntos"] = g.puntos.map {
+                mapOf("latitude" to it.latitude(), "longitude" to it.longitude())
+            }
+        }
+        return m
+    }
+
+    private fun subirGeocerca(g: Geocerca) {
+        database?.child("geocercas")?.child(g.id)?.setValue(aMapa(g))
+    }
+
+    private fun borrarGeocercaRemota(id: String) {
+        database?.child("geocercas")?.child(id)?.removeValue()
+    }
+
+    private fun numero(s: DataSnapshot, clave: String): Double? {
+        return (s.child(clave).value as? Number)?.toDouble()
+    }
+
+    private fun parseGeocercas(snapshot: DataSnapshot): MutableList<Geocerca> {
+        val lista = mutableListOf<Geocerca>()
+        for (child in snapshot.children) {
+            val id = child.key ?: continue
+            val nombre = (child.child("nombre").value as? String) ?: "Geocerca"
+            val tipo = (child.child("tipo").value as? String) ?: "circulo"
+            if (tipo == "poligono") {
+                val pts = mutableListOf<Point>()
+                for (p in child.child("puntos").children) {
+                    val la = numero(p, "latitude")
+                    val lo = numero(p, "longitude")
+                    if (la != null && lo != null) pts.add(Point.fromLngLat(lo, la))
+                }
+                if (pts.size < 3) continue
+                val c = centroide(pts)
+                lista.add(Geocerca(id, nombre, "poligono", c.first, c.second, 0.0, pts))
+            } else {
+                val la = numero(child, "latitude")
+                val lo = numero(child, "longitude")
+                val r = numero(child, "radio")
+                if (la == null || lo == null || r == null) continue
+                lista.add(Geocerca(id, nombre, "circulo", la, lo, r, mutableListOf()))
+            }
+        }
+        return lista
+    }
+
+    /** Las geocercas se comparten con la página web: cualquier cambio en Firebase llega aquí en vivo. */
+    private fun escucharGeocercas() {
         val ref = database?.child("geocercas") ?: return
-        if (geocercas.isEmpty()) {
-            ref.removeValue()
-            return
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val remotas = parseGeocercas(snapshot)
+                if (primeraSincronizacion && remotas.isEmpty() && geocercas.isNotEmpty()) {
+                    // Firebase está vacío pero este teléfono ya tenía geocercas: se suben, no se borran
+                    primeraSincronizacion = false
+                    for (g in geocercas) subirGeocerca(g)
+                    return
+                }
+                primeraSincronizacion = false
+                geocercas.clear()
+                geocercas.addAll(remotas)
+                commitCambios()
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("Geocorez", "No se pudieron leer las geocercas: ${error.message}")
+            }
         }
-        val map = HashMap<String, Any>()
-        for (g in geocercas) {
-            map[g.id] = mapOf(
-                "nombre" to g.nombre,
-                "latitude" to g.lat,
-                "longitude" to g.lng,
-                "radio" to g.radio
-            )
-        }
-        ref.setValue(map)
+        ref.addValueEventListener(listener)
+        geocercasListener = listener
     }
 
     // ---------------------------------------------------------------- ubicación
@@ -310,10 +411,13 @@ class MainActivity : AppCompatActivity() {
             }
             locationComponentPlugin.enabled = !manualMode
 
-            // Administradores de anotaciones: geocercas (polígonos + etiquetas) y marcador manual
+            // Capas de anotaciones (el orden de creación es el orden de apilado)
             val annotationApi = mapView.annotations
             polygonManager = annotationApi.createPolygonAnnotationManager()
+            fenceLineManager = annotationApi.createPolylineAnnotationManager()
             labelManager = annotationApi.createPointAnnotationManager()
+            drawLineManager = annotationApi.createPolylineAnnotationManager()
+            drawDotManager = annotationApi.createCircleAnnotationManager()
             circleManager = annotationApi.createCircleAnnotationManager()
             dibujarGeocercas()
 
@@ -342,9 +446,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupMapGestures() {
-        // Toque corto: en modo manual mueve mi ubicación
+        // Toque corto: agrega un punto al dibujar, o mueve mi ubicación en modo manual
         mapView.gestures.addOnMapClickListener(object : OnMapClickListener {
             override fun onMapClick(point: Point): Boolean {
+                if (drawing) {
+                    agregarVertice(point)
+                    return true
+                }
                 if (manualMode) {
                     setManualPosition(point)
                     return true
@@ -352,10 +460,10 @@ class MainActivity : AppCompatActivity() {
                 return false
             }
         })
-        // Toque largo: crea una geocerca en ese punto
+        // Toque largo: crea una geocerca circular en ese punto
         mapView.gestures.addOnMapLongClickListener(object : OnMapLongClickListener {
             override fun onMapLongClick(point: Point): Boolean {
-                if (!mapReady) return false
+                if (!mapReady || drawing) return false
                 showGeocercaDialog(null, point)
                 return true
             }
@@ -377,6 +485,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
         findViewById<View>(R.id.btnGeofences).setOnClickListener { showListaGeocercas() }
+        findViewById<View>(R.id.btnDraw).setOnClickListener { iniciarDibujo() }
+        findViewById<View>(R.id.btnDrawUndo).setOnClickListener { deshacerVertice() }
+        findViewById<View>(R.id.btnDrawFinish).setOnClickListener { terminarDibujo() }
+        findViewById<View>(R.id.btnDrawCancel).setOnClickListener { cancelarDibujo() }
     }
 
     // ---------------------------------------------------------------- modo manual
@@ -423,13 +535,45 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- geocercas: lógica
 
+    private fun centroide(pts: List<Point>): Pair<Double, Double> {
+        var la = 0.0
+        var lo = 0.0
+        for (p in pts) {
+            la += p.latitude()
+            lo += p.longitude()
+        }
+        return Pair(la / pts.size, lo / pts.size)
+    }
+
+    /** Algoritmo de "rayo": cuenta cuántas veces un rayo desde el punto cruza los bordes. */
+    private fun puntoEnPoligono(lat: Double, lng: Double, pts: List<Point>): Boolean {
+        var dentro = false
+        var j = pts.size - 1
+        for (i in pts.indices) {
+            val yi = pts[i].latitude()
+            val xi = pts[i].longitude()
+            val yj = pts[j].latitude()
+            val xj = pts[j].longitude()
+            val cruza = (yi > lat) != (yj > lat) &&
+                    lng < (xj - xi) * (lat - yi) / (yj - yi) + xi
+            if (cruza) dentro = !dentro
+            j = i
+        }
+        return dentro
+    }
+
+    private fun estaDentro(g: Geocerca, lat: Double, lng: Double): Boolean {
+        if (g.esPoligono) return puntoEnPoligono(lat, lng, g.puntos)
+        val result = FloatArray(1)
+        Location.distanceBetween(lat, lng, g.lat, g.lng, result)
+        return result[0] <= g.radio
+    }
+
     private fun evaluarGeocercas(lat: Double, lng: Double) {
         dentroDe.retainAll(geocercas.map { it.id }.toSet())
-        val result = FloatArray(1)
         var cambio = false
         for (g in geocercas) {
-            Location.distanceBetween(lat, lng, g.lat, g.lng, result)
-            val dentro = result[0] <= g.radio
+            val dentro = estaDentro(g, lat, lng)
             val estabaDentro = dentroDe.contains(g.id)
             if (dentro && !estabaDentro) {
                 dentroDe.add(g.id)
@@ -465,22 +609,32 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun guardarGeocercas() {
+    private fun guardarLocal() {
         val arr = JSONArray()
         for (g in geocercas) {
             val o = JSONObject()
             o.put("id", g.id)
             o.put("nombre", g.nombre)
+            o.put("tipo", g.tipo)
             o.put("lat", g.lat)
             o.put("lng", g.lng)
             o.put("radio", g.radio)
+            if (g.esPoligono) {
+                val pa = JSONArray()
+                for (p in g.puntos) {
+                    val po = JSONObject()
+                    po.put("lat", p.latitude())
+                    po.put("lng", p.longitude())
+                    pa.put(po)
+                }
+                o.put("puntos", pa)
+            }
             arr.put(o)
         }
         getSharedPreferences("geocorez_prefs", MODE_PRIVATE)
             .edit()
             .putString("geocercas", arr.toString())
             .apply()
-        sincronizarGeocercasFirebase()
     }
 
     private fun cargarGeocercas() {
@@ -490,13 +644,25 @@ class MainActivity : AppCompatActivity() {
             val arr = JSONArray(json)
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
+                val tipo = o.optString("tipo", "circulo")
+                val pts = mutableListOf<Point>()
+                val pa = o.optJSONArray("puntos")
+                if (pa != null) {
+                    for (k in 0 until pa.length()) {
+                        val po = pa.getJSONObject(k)
+                        pts.add(Point.fromLngLat(po.getDouble("lng"), po.getDouble("lat")))
+                    }
+                }
+                if (tipo == "poligono" && pts.size < 3) continue
                 geocercas.add(
                     Geocerca(
                         o.getString("id"),
                         o.getString("nombre"),
+                        tipo,
                         o.getDouble("lat"),
                         o.getDouble("lng"),
-                        o.getDouble("radio")
+                        o.getDouble("radio"),
+                        pts
                     )
                 )
             }
@@ -505,33 +671,53 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun refrescarGeocercas() {
-        guardarGeocercas()
+    /** Guarda en el teléfono, vuelve a evaluar dónde estoy y redibuja. */
+    private fun commitCambios() {
+        guardarLocal()
         val p = currentPoint
-        if (p != null) evaluarGeocercas(p.latitude(), p.longitude()) else actualizarEstadoGeocercas()
+        if (p != null) {
+            evaluarGeocercas(p.latitude(), p.longitude())
+        } else {
+            actualizarEstadoGeocercas()
+        }
         dibujarGeocercas()
     }
 
-    // ---------------------------------------------------------------- geocercas: dibujo
+    private fun nuevoId(): String = UUID.randomUUID().toString().substring(0, 8)
+
+    // ---------------------------------------------------------------- geocercas: dibujo en el mapa
 
     private fun dibujarGeocercas() {
         val pm = polygonManager ?: return
         val lm = labelManager ?: return
+        val fm = fenceLineManager ?: return
         pm.deleteAll()
         lm.deleteAll()
+        fm.deleteAll()
         for (g in geocercas) {
             val color = if (dentroDe.contains(g.id)) "#35B82A" else "#1E9BE8"
+            val anillo: List<Point> = if (g.esPoligono) {
+                g.puntos + g.puntos.first()
+            } else {
+                puntosCirculo(g.lat, g.lng, g.radio)
+            }
             pm.create(
                 PolygonAnnotationOptions()
-                    .withPoints(listOf(puntosCirculo(g.lat, g.lng, g.radio)))
+                    .withPoints(listOf(anillo))
                     .withFillColor(color)
                     .withFillOpacity(0.25)
-                    .withFillOutlineColor(color)
             )
+            fm.create(
+                PolylineAnnotationOptions()
+                    .withPoints(anillo)
+                    .withLineColor(color)
+                    .withLineWidth(3.0)
+            )
+            val etiqueta = if (g.esPoligono) g.nombre else "${g.nombre} (${g.radio.toInt()} m)"
             lm.create(
                 PointAnnotationOptions()
                     .withPoint(Point.fromLngLat(g.lng, g.lat))
-                    .withTextField("${g.nombre} (${g.radio.toInt()} m)")
+                    .withTextField(etiqueta)
                     .withTextSize(13.0)
                     .withTextColor(color)
                     .withTextHaloColor("#FFFFFF")
@@ -560,9 +746,93 @@ class MainActivity : AppCompatActivity() {
         return puntos
     }
 
+    // ---------------------------------------------------------------- dibujar una zona de forma libre
+
+    private fun iniciarDibujo() {
+        if (!mapReady) {
+            toast("El mapa aún se está cargando")
+            return
+        }
+        drawing = true
+        drawPoints.clear()
+        drawPanel.visibility = View.VISIBLE
+        refrescarDibujo()
+        toast("Toca el mapa para marcar los puntos de la zona")
+    }
+
+    private fun agregarVertice(p: Point) {
+        drawPoints.add(p)
+        refrescarDibujo()
+    }
+
+    private fun deshacerVertice() {
+        if (drawPoints.isNotEmpty()) {
+            drawPoints.removeAt(drawPoints.size - 1)
+            refrescarDibujo()
+        }
+    }
+
+    private fun terminarDibujo() {
+        if (drawPoints.size < 3) {
+            toast("Marca al menos 3 puntos")
+            return
+        }
+        showGeocercaDialog(null, null, ArrayList(drawPoints))
+    }
+
+    private fun cancelarDibujo() {
+        finalizarDibujo()
+    }
+
+    private fun finalizarDibujo() {
+        drawing = false
+        drawPoints.clear()
+        drawPanel.visibility = View.GONE
+        drawDotManager?.deleteAll()
+        drawLineManager?.deleteAll()
+    }
+
+    private fun refrescarDibujo() {
+        val dm = drawDotManager
+        val lm = drawLineManager
+        dm?.deleteAll()
+        lm?.deleteAll()
+        for (p in drawPoints) {
+            dm?.create(
+                CircleAnnotationOptions()
+                    .withPoint(p)
+                    .withCircleRadius(6.0)
+                    .withCircleColor("#FF9800")
+                    .withCircleStrokeWidth(2.0)
+                    .withCircleStrokeColor("#FFFFFF")
+            )
+        }
+        if (drawPoints.size >= 2) {
+            val linea: List<Point> = if (drawPoints.size >= 3) {
+                drawPoints + drawPoints.first()
+            } else {
+                drawPoints.toList()
+            }
+            lm?.create(
+                PolylineAnnotationOptions()
+                    .withPoints(linea)
+                    .withLineColor("#FF9800")
+                    .withLineWidth(3.0)
+            )
+        }
+        drawHintTextView.text = "Puntos: ${drawPoints.size} (mínimo 3)"
+    }
+
     // ---------------------------------------------------------------- geocercas: diálogos
 
-    private fun showGeocercaDialog(existing: Geocerca?, point: Point?) {
+    /**
+     * Crea o edita una geocerca.
+     *  - existing != null: edita (círculo: nombre y radio; polígono: solo nombre).
+     *  - puntosNuevos != null: guarda una zona dibujada.
+     *  - point != null: crea un círculo en ese punto.
+     */
+    private fun showGeocercaDialog(existing: Geocerca?, point: Point?, puntosNuevos: List<Point>? = null) {
+        val esPoligono = (existing != null && existing.esPoligono) || puntosNuevos != null
         val pad = (24 * resources.displayMetrics.density).toInt()
         val container = LinearLayout(this)
         container.orientation = LinearLayout.VERTICAL
@@ -572,17 +842,22 @@ class MainActivity : AppCompatActivity() {
         nameInput.hint = "Nombre de la geocerca"
         nameInput.inputType = InputType.TYPE_CLASS_TEXT
         nameInput.setText(existing?.nombre ?: "Geocerca ${geocercas.size + 1}")
+        container.addView(nameInput)
 
         val radiusInput = EditText(this)
         radiusInput.hint = "Radio en metros"
         radiusInput.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
         radiusInput.setText((existing?.radio ?: 100.0).toInt().toString())
+        if (!esPoligono) container.addView(radiusInput)
 
-        container.addView(nameInput)
-        container.addView(radiusInput)
+        val titulo = when {
+            existing != null -> "Editar geocerca"
+            puntosNuevos != null -> "Nueva zona"
+            else -> "Nueva geocerca"
+        }
 
         AlertDialog.Builder(this, R.style.GeocorezDialog)
-            .setTitle(if (existing == null) "Nueva geocerca" else "Editar geocerca")
+            .setTitle(titulo)
             .setView(container)
             .setPositiveButton("Guardar") { _, _ ->
                 val nombre = nameInput.text.toString().trim()
@@ -591,19 +866,24 @@ class MainActivity : AppCompatActivity() {
                     .coerceIn(10.0, 100000.0)
                 if (existing != null) {
                     existing.nombre = nombre
-                    existing.radio = radio
-                } else if (point != null) {
-                    geocercas.add(
-                        Geocerca(
-                            UUID.randomUUID().toString().substring(0, 8),
-                            nombre,
-                            point.latitude(),
-                            point.longitude(),
-                            radio
-                        )
+                    if (!existing.esPoligono) existing.radio = radio
+                    subirGeocerca(existing)
+                } else if (puntosNuevos != null) {
+                    val c = centroide(puntosNuevos)
+                    val g = Geocerca(
+                        nuevoId(), nombre, "poligono", c.first, c.second, 0.0, ArrayList(puntosNuevos)
                     )
+                    geocercas.add(g)
+                    subirGeocerca(g)
+                    finalizarDibujo()
+                } else if (point != null) {
+                    val g = Geocerca(
+                        nuevoId(), nombre, "circulo", point.latitude(), point.longitude(), radio, mutableListOf()
+                    )
+                    geocercas.add(g)
+                    subirGeocerca(g)
                 }
-                refrescarGeocercas()
+                commitCambios()
             }
             .setNegativeButton("Cancelar", null)
             .show()
@@ -611,12 +891,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun showListaGeocercas() {
         if (geocercas.isEmpty()) {
-            toast("No hay geocercas. Usa \"+ Geocerca\" o mantén presionado el mapa.")
+            toast("No hay geocercas. Usa \"+ Círculo\", \"Dibujar zona\" o mantén presionado el mapa.")
             return
         }
         val items = geocercas.map {
             val estado = if (dentroDe.contains(it.id)) "  (dentro)" else ""
-            "${it.nombre} - ${it.radio.toInt()} m$estado"
+            if (it.esPoligono) {
+                "${it.nombre} - zona libre (${it.puntos.size} puntos)$estado"
+            } else {
+                "${it.nombre} - ${it.radio.toInt()} m$estado"
+            }
         }.toTypedArray()
 
         AlertDialog.Builder(this, R.style.GeocorezDialog)
@@ -627,29 +911,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAccionesGeocerca(g: Geocerca) {
-        val opciones = arrayOf(
-            "Ir a la geocerca",
-            "Editar nombre y radio",
-            "Mover a mi ubicación actual",
-            "Eliminar"
-        )
+        val opciones = if (g.esPoligono) {
+            arrayOf("Ir a la geocerca", "Renombrar", "Eliminar")
+        } else {
+            arrayOf("Ir a la geocerca", "Editar nombre y radio", "Mover a mi ubicación actual", "Eliminar")
+        }
         AlertDialog.Builder(this, R.style.GeocorezDialog)
             .setTitle(g.nombre)
             .setItems(opciones) { _, which ->
-                when (which) {
-                    0 -> moverCamara(Point.fromLngLat(g.lng, g.lat), 16.0)
-                    1 -> showGeocercaDialog(g, null)
-                    2 -> {
+                when (opciones[which]) {
+                    "Ir a la geocerca" -> moverCamara(Point.fromLngLat(g.lng, g.lat), 16.0)
+                    "Renombrar", "Editar nombre y radio" -> showGeocercaDialog(g, null)
+                    "Mover a mi ubicación actual" -> {
                         val p = currentPoint
                         if (p != null) {
                             g.lat = p.latitude()
                             g.lng = p.longitude()
-                            refrescarGeocercas()
+                            subirGeocerca(g)
+                            commitCambios()
                         } else {
                             toast("Aún no hay ubicación")
                         }
                     }
-                    3 -> confirmarEliminar(g)
+                    "Eliminar" -> confirmarEliminar(g)
                 }
             }
             .setNegativeButton("Cerrar", null)
@@ -663,7 +947,8 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Eliminar") { _, _ ->
                 geocercas.remove(g)
                 dentroDe.remove(g.id)
-                refrescarGeocercas()
+                borrarGeocercaRemota(g.id)
+                commitCambios()
             }
             .setNegativeButton("Cancelar", null)
             .show()
