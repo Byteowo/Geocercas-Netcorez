@@ -14,6 +14,8 @@
       --blue-bottom: #1e9be8;
       --green-top: #b8f26b;
       --green-bottom: #3fae2a;
+      --red-top: #ff9a8f;
+      --red-bottom: #e5484d;
       --ok: #35b82a;
       --warn: #f0a30a;
       --bad: #e5484d;
@@ -79,11 +81,13 @@
     .pill.stale .dot { background: var(--warn); box-shadow: 0 0 0 3px rgba(240,163,10,.28); }
     .pill.off .dot { background: var(--bad); box-shadow: 0 0 0 3px rgba(229,72,77,.25); }
 
-    /* Distribución */
-
-    .layout { display: flex; flex-direction: row; gap: 16px; height: calc(100vh - 118px); min-height: 540px; }
-    .mapwrap { position: relative; flex: 1; overflow: hidden; padding: 6px; display: flex; }
-    #map { width: 100%; height: 100%; border-radius: 15px; background: #cfeaf7; z-index: 1; }
+    /* Distribución: la columna derecha tiene ancho FIJO para que el mapa nunca cambie de tamaño
+       cuando cambia el contenido de los paneles (eso desajustaba las capas de Leaflet). */
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; height: calc(100vh - 118px); min-height: 540px; }
+    /* El contenedor del mapa NO usa desenfoque de fondo: el backdrop-filter en un ancestro del mapa
+       provoca desajustes de las capas vectoriales durante el zoom en algunos navegadores. */
+    .mapwrap { position: relative; overflow: hidden; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    #map { position: absolute; inset: 6px; border-radius: 15px; background: #cfeaf7; z-index: 0; }
 
     /* Botones flotantes interactivos */
     .mapbtns { position: absolute; right: 18px; top: 18px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
@@ -91,14 +95,14 @@
     /* Panel flotante de dibujo activo */
     .draw-panel {
       position: absolute; left: 18px; bottom: 24px; z-index: 1000; display: none;
-      background: rgba(255, 255, 255, 0.92); padding: 12px 16px; border-radius: 16px;
+      background: rgba(255, 255, 255, 0.94); padding: 12px 16px; border-radius: 16px;
       border: 1.5px solid #fff; box-shadow: 0 6px 20px rgba(20,100,150,.3);
-      backdrop-filter: blur(8px); flex-direction: column; gap: 8px; min-width: 220px;
+      flex-direction: column; gap: 8px; min-width: 220px;
     }
     .draw-panel.active { display: flex; }
     .draw-panel p { margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--deep); }
 
-    .side { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding: 2px; min-height: 0; }
+    .side { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding: 2px; min-height: 0; min-width: 0; }
     .card { padding: 16px 18px; }
     h2 { margin: 0 0 10px; font-size: .95rem; text-transform: uppercase; letter-spacing: .8px; color: var(--soft); }
 
@@ -119,9 +123,12 @@
     }
     .btn.green { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); text-shadow: 0 1px 2px rgba(36,107,20,.6); }
     .btn.off { background: linear-gradient(180deg, #d9e6ee, #9db4c2); text-shadow: 0 1px 2px rgba(40,70,90,.5); }
-    .btn.danger { background: linear-gradient(180deg, #ff8080, #e5484d); text-shadow: 0 1px 2px rgba(100,20,20,.6); }
+    .btn.danger { background: linear-gradient(180deg, var(--red-top), var(--red-bottom)); text-shadow: 0 1px 2px rgba(100,20,20,.6); }
     .btn:hover { filter: brightness(1.06); }
     .btn:active { transform: translateY(1px); filter: brightness(.95); }
+    .btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px var(--blue-bottom); }
+    .btn:disabled { opacity: .55; cursor: not-allowed; filter: grayscale(.4); }
+    .btn.mini { min-width: auto; padding: 4px 10px; font-size: .7rem; }
 
     /* Datos */
     dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; }
@@ -142,7 +149,7 @@
     .chip { flex: none; padding: 3px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
     .chip.in { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); }
     .chip.out { background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom)); }
-    .status-line { font-weight: 700; }
+    .status-line { font-weight: 700; overflow-wrap: anywhere; }
 
     /* Marcador y animaciones */
     .pin { position: relative; width: 28px; height: 28px; }
@@ -156,6 +163,7 @@
       border: 2px solid rgba(53,184,42,.7); animation: pulse 2s ease-out infinite;
     }
     @keyframes pulse { 0% { transform: scale(.7); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .pin::after { animation: none; opacity: 0; } }
 
     .leaflet-tooltip.fence-label {
       background: rgba(255,255,255,.92); border: 1px solid #fff; border-radius: 10px;
@@ -163,7 +171,7 @@
     }
     .leaflet-container a { color: var(--blue-bottom); }
 
-    /* Avisos de entrada y salida de geocercas */
+    /* Avisos (entradas, salidas y mensajes) */
     .toasts {
       position: fixed; top: 112px; left: 50%; transform: translateX(-50%); z-index: 3000;
       display: flex; flex-direction: column; gap: 10px; align-items: center;
@@ -185,19 +193,36 @@
       border: 2px solid #fff; box-shadow: 0 3px 8px rgba(20,100,150,.35);
       text-shadow: 0 1px 2px rgba(0,0,0,.3);
     }
-    .toast.in .ico { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); }
+    .toast.in .ico, .toast.ok .ico { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); }
     .toast.out .ico { background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom)); }
+    .toast.err .ico { background: linear-gradient(180deg, var(--red-top), var(--red-bottom)); }
     .toast .txt { display: flex; flex-direction: column; min-width: 0; }
-    .toast .txt strong { font-size: .95rem; overflow-wrap: anywhere; }
+    .toast .txt strong { font-size: .92rem; overflow-wrap: anywhere; }
     .toast .txt .when { font-size: .75rem; color: var(--soft); }
     @keyframes toast-in { from { opacity: 0; transform: translateY(-10px) scale(.96); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+    /* Diálogo (reemplaza a prompt / confirm / alert) */
+    dialog { border: none; padding: 0; background: transparent; max-width: calc(100% - 28px); width: 400px; }
+    dialog::backdrop { background: rgba(11,79,108,.38); }
+    .dlg { padding: 22px; background: linear-gradient(180deg, #fff, #d9f2ff); border: 2px solid #8fd3f4; border-radius: 24px; box-shadow: 0 20px 50px rgba(11,79,108,.4); color: var(--deep); }
+    .dlg h3 { margin: 0 0 12px; font-size: 1.1rem; }
+    .dlg-msg { margin: 0 0 14px; color: var(--soft); overflow-wrap: anywhere; }
+    .field { display: block; margin-bottom: 12px; }
+    .field span { display: block; font-size: .8rem; font-weight: 700; color: var(--soft); margin-bottom: 4px; }
+    .field input {
+      width: 100%; padding: 10px 12px; border-radius: 12px; border: 1.5px solid #9fd6f0; background: #fff;
+      font: inherit; color: var(--deep);
+    }
+    .field input:focus { outline: 3px solid rgba(30,155,232,.35); border-color: var(--blue-bottom); }
+    .dlg-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+    .dlg-actions .btn { min-width: 100px; }
 
     footer { text-align: center; font-size: .75rem; color: var(--soft); margin-top: 14px; }
 
     @media (max-width: 860px) {
       .layout { grid-template-columns: 1fr; height: auto; }
-      .mapwrap { height: 58vh; min-height: 340px; }
+      .mapwrap { height: 62vh; min-height: 360px; }
       .side { overflow: visible; }
       .topbar { flex-wrap: wrap; }
       .toasts { top: 8px; }
@@ -239,9 +264,9 @@
       <div class="draw-panel" id="drawPanel">
         <p id="drawInfo">Puntos: 0 (mínimo 3)</p>
         <div style="display: flex; gap: 6px;">
-          <button class="btn" id="btnUndo" type="button" style="padding: 6px 10px; font-size: 0.75rem;">Deshacer</button>
-          <button class="btn green" id="btnFinish" type="button" style="padding: 6px 10px; font-size: 0.75rem;" disabled>Terminar</button>
-          <button class="btn danger" id="btnCancel" type="button" style="padding: 6px 10px; font-size: 0.75rem;">Cancelar</button>
+          <button class="btn mini" id="btnUndo" type="button">Deshacer</button>
+          <button class="btn green mini" id="btnFinish" type="button" disabled>Terminar</button>
+          <button class="btn danger mini" id="btnCancel" type="button">Cancelar</button>
         </div>
       </div>
     </section>
@@ -253,6 +278,7 @@
           <dt>Latitud</dt><dd id="vLat">—</dd>
           <dt>Longitud</dt><dd id="vLng">—</dd>
           <dt>Modo</dt><dd id="vMode">—</dd>
+          <dt>Precisión</dt><dd id="vAcc">—</dd>
           <dt>Actualizado</dt><dd id="vAge">—</dd>
         </dl>
       </section>
@@ -273,6 +299,17 @@
   <footer>Geocorez · Sincronización Web & Móvil con Mapbox y Firebase</footer>
 </div>
 
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <form class="dlg" id="dlgForm">
+    <h3 id="dlgTitle"></h3>
+    <div id="dlgBody"></div>
+    <div class="dlg-actions">
+      <button class="btn" id="dlgCancel" type="button">Cancelar</button>
+      <button class="btn green" id="dlgOk" type="submit">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
   (function () {
@@ -283,13 +320,30 @@
     var EVENTS_MS = 5000;
     var STALE_MS = 30000;
 
+    var MAX_PRECISION_M = 50;          // una lectura con más error que esto no sirve para decidir entradas o salidas
+    var LECTURAS_PARA_CONFIRMAR = 2;   // lecturas nuevas seguidas necesarias para confirmar una entrada o salida
+
     var COLOR_IN = '#35b82a';
     var COLOR_OUT = '#1e9be8';
 
     var $ = function (id) { return document.getElementById(id); };
 
     var map = L.map('map').setView([-16.5, -68.15], 13);
-    setTimeout(function() { map.invalidateSize(); }, 200);
+
+    // Leaflet solo se entera del tamaño de la ventana, no del tamaño real del contenedor.
+    // Este observador le avisa cada vez que el contenedor cambia, para que las capas no se desajusten.
+    var resizePendiente = false;
+    function ajustarTamano() {
+      if (resizePendiente) return;
+      resizePendiente = true;
+      requestAnimationFrame(function () {
+        resizePendiente = false;
+        map.invalidateSize({ animate: false, pan: false });
+      });
+    }
+    if (window.ResizeObserver) { new ResizeObserver(ajustarTamano).observe($('map')); }
+    window.addEventListener('resize', ajustarTamano);
+    window.addEventListener('load', ajustarTamano);
 
     var MAPBOX_TOKEN = 'pk.eyJ1IjoieW9zaGljb3JlIiwiYSI6ImNtd2NvcTFobTA0bW4zMG85cG9mc2E2cWwifQ.L6gUJs7fyQ_ewHSXad6TLw'; // Reemplaza por tu token real
 
@@ -311,12 +365,19 @@
     var followUser = true;
     var lastPos = null;
     var lastTs = 0;
+    var lastPrecision = null;
     var connected = false;
     var fences = [];
     var fenceLayers = {};
     var fencesKey = '';
+    var listKey = '';
+    var eventsKey = '';
     var currentMode = 'GPS';
-    var insideState = {};   // último estado conocido de cada geocerca (true = dentro) para detectar entradas y salidas
+    var lastWriteAt = 0;             // evita que una lectura vieja pise un cambio recién guardado
+    var lastInteraction = 0;         // última vez que la persona tocó el mapa (arrastre, zoom, clic)
+    var insideState = {};            // último estado conocido de cada geocerca (true = dentro)
+    var pendiente = {};              // id -> lecturas nuevas seguidas que contradicen el estado conocido
+    var ultimaLecturaEvaluada = null;
 
     // Variables para dibujo de polígonos
     var isDrawing = false;
@@ -324,6 +385,7 @@
     var tempMarkers = [];
     var tempPolyline = null;
 
+    // ----- Utilidades -----
     function getJSON(path) {
       var ctl = new AbortController();
       var timer = setTimeout(function () { ctl.abort(); }, 6000);
@@ -335,12 +397,16 @@
               .finally(function () { clearTimeout(timer); });
     }
 
-    function putJSON(path, data) {
-      return fetch(DB + path, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      }).then(function (r) { return r.json(); });
+    function send(method, path, body) {
+      var opts = { method: method, cache: 'no-store' };
+      if (body !== undefined) {
+        opts.headers = { 'Content-Type': 'application/json' };
+        opts.body = JSON.stringify(body);
+      }
+      return fetch(DB + path, opts).then(function (r) {
+        if (!r.ok) { throw new Error('HTTP ' + r.status); }
+        return r.json();
+      });
     }
 
     function num(v) { var n = Number(v); return isFinite(n) ? n : null; }
@@ -351,6 +417,12 @@
       if (text !== undefined) e.textContent = text;
       return e;
     }
+
+    function limpiarNombre(v, porDefecto) {
+      return String(v === null || v === undefined ? '' : v).trim().slice(0, 60) || porDefecto;
+    }
+
+    function acotar(n, min, max) { return Math.min(Math.max(n, min), max); }
 
     function fmtAgo(ms) {
       var s = Math.max(0, Math.round(ms / 1000));
@@ -366,6 +438,132 @@
       return d.toLocaleString('es-BO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
 
+    // Lee los puntos de un polígono sin importar cómo se guardaron:
+    // {latitude, longitude} (formato actual de la app y de esta página) o [lat, lng] (formato antiguo)
+    function leerPuntos(raw) {
+      var arr = Array.isArray(raw)
+              ? raw
+              : (raw && typeof raw === 'object'
+                      ? Object.keys(raw).sort(function (a, b) { return Number(a) - Number(b); }).map(function (k) { return raw[k]; })
+                      : []);
+      var pts = [];
+      arr.forEach(function (p) {
+        if (!p) return;
+        var la, lo;
+        if (Array.isArray(p)) { la = num(p[0]); lo = num(p[1]); }
+        else {
+          la = num(p.latitude !== undefined ? p.latitude : p.lat);
+          lo = num(p.longitude !== undefined ? p.longitude : p.lng);
+        }
+        if (la !== null && lo !== null) pts.push([la, lo]);
+      });
+      return pts;
+    }
+
+    function centroide(pts) {
+      var la = 0, lo = 0;
+      pts.forEach(function (p) { la += p[0]; lo += p[1]; });
+      return [la / pts.length, lo / pts.length];
+    }
+
+    // Cuerpos que se guardan en Firebase: el mismo formato que usa la app
+    function cuerpoCirculo(nombre, lat, lng, radio) {
+      return { nombre: nombre, tipo: 'circulo', latitude: lat, longitude: lng, radio: radio };
+    }
+
+    function cuerpoPoligono(nombre, pts) {
+      var c = centroide(pts);
+      return {
+        nombre: nombre,
+        tipo: 'poligono',
+        latitude: c[0],
+        longitude: c[1],
+        radio: 0,
+        puntos: pts.map(function (p) { return { latitude: p[0], longitude: p[1] }; })
+      };
+    }
+
+    // ----- Avisos -----
+    function pushToast(cls, icono, titulo, sub, ms) {
+      var box = $('toasts');
+      var t = el('div', 'toast ' + cls);
+      t.setAttribute('role', 'status');
+      var txt = el('div', 'txt');
+      txt.appendChild(el('strong', '', titulo));
+      if (sub) txt.appendChild(el('span', 'when', sub));
+      t.appendChild(el('span', 'ico', icono));
+      t.appendChild(txt);
+
+      function close() {
+        t.classList.add('leaving');
+        setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+      }
+      t.addEventListener('click', close);
+      box.appendChild(t);
+      while (box.children.length > 4) box.removeChild(box.firstChild);
+      setTimeout(close, ms || 7000);
+    }
+
+    // Aviso de entrada o salida de una geocerca: tipo 'in' o 'out'
+    function notify(tipo, nombre) {
+      pushToast(tipo, tipo === 'in' ? '→' : '←',
+              (tipo === 'in' ? 'Entraste a “' : 'Saliste de “') + nombre + '”',
+              new Date().toLocaleTimeString('es-BO'), 7000);
+    }
+
+    // Mensaje general (reemplaza a alert)
+    function msg(texto, esError) {
+      pushToast(esError ? 'err' : 'ok', esError ? '!' : '✓', texto, '', esError ? 6000 : 4000);
+    }
+
+    // Diálogo reutilizable (reemplaza a prompt y confirm). Devuelve una promesa con los valores o null.
+    function openDialog(opts) {
+      return new Promise(function (resolve) {
+        var dlg = $('dlg'), form = $('dlgForm'), body = $('dlgBody');
+        $('dlgTitle').textContent = opts.title;
+        body.replaceChildren();
+        if (opts.message) { body.appendChild(el('p', 'dlg-msg', opts.message)); }
+        var first = null;
+        (opts.fields || []).forEach(function (f) {
+          var wrap = el('label', 'field');
+          wrap.appendChild(el('span', '', f.label));
+          var inp = document.createElement('input');
+          inp.type = f.type || 'text';
+          inp.name = f.id;
+          inp.value = f.value === undefined ? '' : String(f.value);
+          inp.required = true;
+          if (f.type === 'number') { inp.step = 'any'; if (f.min !== undefined) inp.min = f.min; if (f.max !== undefined) inp.max = f.max; }
+          else { inp.maxLength = 60; }
+          wrap.appendChild(inp);
+          body.appendChild(wrap);
+          if (!first) first = inp;
+        });
+        var ok = $('dlgOk');
+        ok.textContent = opts.okText || 'Guardar';
+        ok.classList.toggle('danger', !!opts.danger);
+        ok.classList.toggle('green', !opts.danger);
+
+        function finish(v) {
+          form.onsubmit = null;
+          $('dlgCancel').onclick = null;
+          dlg.oncancel = null;
+          if (dlg.open) dlg.close();
+          resolve(v);
+        }
+        form.onsubmit = function (e) {
+          e.preventDefault();
+          var data = {};
+          (opts.fields || []).forEach(function (f) { data[f.id] = form.elements[f.id].value; });
+          finish(data);
+        };
+        $('dlgCancel').onclick = function () { finish(null); };
+        dlg.oncancel = function (e) { e.preventDefault(); finish(null); };
+        dlg.showModal();
+        if (first) setTimeout(function () { first.focus(); first.select(); }, 30);
+      });
+    }
+
+    // ----- Conexión -----
     function refreshConn() {
       if (!connected) { $('conn').className = 'pill off'; $('connText').textContent = 'Sin conexión'; return; }
       if (!lastTs) { $('conn').className = 'pill stale'; $('connText').textContent = 'Esperando datos'; return; }
@@ -375,23 +573,51 @@
       else { $('conn').className = 'pill live'; $('connText').textContent = 'En vivo'; }
     }
 
+    // ----- Seguimiento del mapa -----
+    function setFollow(v) {
+      followUser = v;
+      $('btnFollow').textContent = v ? 'Seguir: Activo' : 'Seguir: Pausado';
+      $('btnFollow').classList.toggle('off', !v);
+    }
+
+    // Se anota cada vez que la persona toca el mapa, para no mover la vista mientras lo está usando
+    ['pointerdown', 'wheel', 'touchstart', 'keydown'].forEach(function (ev) {
+      $('map').addEventListener(ev, function () { lastInteraction = Date.now(); }, { passive: true });
+    });
+
+    function usandoElMapa() { return Date.now() - lastInteraction < 1500; }
+
+    // Si la persona arrastra o hace zoom, se deja de seguir (como en cualquier mapa)
+    map.on('dragstart', function () { if (followUser) setFollow(false); });
+    map.on('zoomstart', function () { if (followUser && usandoElMapa()) setFollow(false); });
+
     function renderUser(u) {
       if (!u || typeof u !== 'object') return;
       var lat = num(u.latitude), lng = num(u.longitude);
       if (lat === null || lng === null) return;
 
+      var primera = !lastPos;
+      var cambio = primera || lastPos[0] !== lat || lastPos[1] !== lng;
       lastPos = [lat, lng];
       lastTs = num(u.timestamp) || 0;
+      lastPrecision = (u.precision === undefined || u.precision === null) ? null : num(u.precision);
 
-      if (!marker) marker = L.marker(lastPos, { icon: pinIcon }).addTo(map);
+      if (!marker) marker = L.marker(lastPos, { icon: pinIcon, keyboard: false, interactive: false }).addTo(map);
       else marker.setLatLng(lastPos);
 
-      if (followUser) map.panTo(lastPos, { animate: true });
+      if (primera) {
+        map.setView(lastPos, 16, { animate: false });
+      } else if (cambio && followUser && !isDrawing && !usandoElMapa()) {
+        // Sin animación y solo cuando la ubicación cambió de verdad: mover la vista cada 2 s con animación
+        // interrumpía el zoom y desajustaba las capas del mapa.
+        map.panTo(lastPos, { animate: false });
+      }
 
       $('vLat').textContent = lat.toFixed(6);
       $('vLng').textContent = lng.toFixed(6);
-      currentMode = u.modo || 'GPS';
+      currentMode = u.modo === 'manual' ? 'manual' : 'GPS';
       $('vMode').textContent = currentMode === 'manual' ? 'Manual' : 'GPS';
+      $('vAcc').textContent = lastPrecision === null ? '—' : '±' + Math.round(lastPrecision) + ' m';
       $('btnMode').textContent = 'Modo: ' + (currentMode === 'manual' ? 'Manual' : 'GPS');
 
       updateFenceState();
@@ -418,40 +644,38 @@
       return map.distance(lastPos, [f.lat, f.lng]) <= (f.radio || 50);
     }
 
-    // Muestra un aviso en pantalla: tipo 'in' (entrada) o 'out' (salida)
-    function notify(tipo, nombre) {
-      var box = $('toasts');
-      var t = el('div', 'toast ' + tipo);
-      t.setAttribute('role', 'status');
-      var txt = el('div', 'txt');
-      txt.appendChild(el('strong', '', (tipo === 'in' ? 'Entraste a “' : 'Saliste de “') + nombre + '”'));
-      txt.appendChild(el('span', 'when', new Date().toLocaleTimeString('es-BO')));
-      t.appendChild(el('span', 'ico', tipo === 'in' ? '→' : '←'));
-      t.appendChild(txt);
-
-      function close() {
-        t.classList.add('leaving');
-        setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
-      }
-      t.addEventListener('click', close);
-      box.appendChild(t);
-      while (box.children.length > 4) box.removeChild(box.firstChild);
-      setTimeout(close, 7000);
-    }
-
-    // Compara dónde estás ahora con el estado anterior de cada geocerca y avisa si cambió
+    // Compara dónde estás ahora con el estado anterior de cada geocerca y avisa si cambió.
+    // Para evitar avisos falsos por el rebote del GPS: se ignoran lecturas imprecisas y un cambio solo se
+    // confirma con 2 lecturas nuevas seguidas (el modo manual es inmediato, porque un clic es deliberado).
     function checkTransitions() {
       if (!lastPos) return;
+      if (lastPrecision !== null && lastPrecision > MAX_PRECISION_M) return;
+      var nueva = lastTs !== ultimaLecturaEvaluada;
+      var inmediato = currentMode === 'manual';
       var vistos = {};
       fences.forEach(function (f) {
         var dentro = insideOf(f);
         var antes = insideState[f.id];
         vistos[f.id] = true;
-        // Sin estado previo (primera carga o geocerca nueva): se registra sin avisar
-        if (antes !== undefined && antes !== dentro) notify(dentro ? 'in' : 'out', f.nombre);
-        insideState[f.id] = dentro;
+        if (antes === undefined || antes === dentro) {   // primera vez, o sin cambios
+          insideState[f.id] = dentro;
+          delete pendiente[f.id];
+          return;
+        }
+        if (!nueva) return;                               // la misma lectura no cuenta dos veces
+        var n = (pendiente[f.id] || 0) + 1;
+        if (inmediato || n >= LECTURAS_PARA_CONFIRMAR) {
+          insideState[f.id] = dentro;
+          delete pendiente[f.id];
+          notify(dentro ? 'in' : 'out', f.nombre);
+        } else {
+          pendiente[f.id] = n;
+        }
       });
-      Object.keys(insideState).forEach(function (id) { if (!vistos[id]) delete insideState[id]; });
+      Object.keys(insideState).forEach(function (id) {
+        if (!vistos[id]) { delete insideState[id]; delete pendiente[id]; }
+      });
+      ultimaLecturaEvaluada = lastTs;
     }
 
     function renderFences(g) {
@@ -462,9 +686,10 @@
           if (!v || typeof v !== 'object') return;
           var nombre = String(v.nombre || 'Geocerca').slice(0, 60);
 
-          if (v.puntos && Array.isArray(v.puntos) && v.puntos.length >= 3) {
-            list.push({ id: id, nombre: nombre, puntos: v.puntos, tipo: 'poligono' });
-          } else {
+          var pts = (v.tipo === 'poligono' || v.puntos) ? leerPuntos(v.puntos) : [];
+          if (pts.length >= 3) {
+            list.push({ id: id, nombre: nombre, puntos: pts, tipo: 'poligono' });
+          } else if (v.tipo !== 'poligono') {
             var lat = num(v.latitude), lng = num(v.longitude), r = num(v.radio);
             if (lat !== null && lng !== null && r !== null) {
               list.push({ id: id, nombre: nombre, lat: lat, lng: lng, radio: r, tipo: 'circulo' });
@@ -479,14 +704,13 @@
         Object.keys(fenceLayers).forEach(function (id) { map.removeLayer(fenceLayers[id]); });
         fenceLayers = {};
         fences.forEach(function (f) {
-          var layer;
-          if (f.tipo === 'poligono') {
-            layer = L.polygon(f.puntos, { weight: 2, fillOpacity: .22 }).addTo(map);
-            layer.bindTooltip(f.nombre, { direction: 'top', className: 'fence-label' });
-          } else {
-            layer = L.circle([f.lat, f.lng], { radius: f.radio, weight: 2, fillOpacity: .22 }).addTo(map);
-            layer.bindTooltip(f.nombre + ' · ' + Math.round(f.radio) + ' m', { direction: 'top', className: 'fence-label' });
-          }
+          var layer = f.tipo === 'poligono'
+                  ? L.polygon(f.puntos, { weight: 2, fillOpacity: .22 })
+                  : L.circle([f.lat, f.lng], { radius: f.radio, weight: 2, fillOpacity: .22 });
+          layer.addTo(map);
+          var tip = document.createElement('span');   // textContent: los nombres no se interpretan como HTML
+          tip.textContent = f.tipo === 'poligono' ? f.nombre : f.nombre + ' · ' + Math.round(f.radio) + ' m';
+          layer.bindTooltip(tip, { direction: 'top', className: 'fence-label', sticky: true });
           fenceLayers[f.id] = layer;
         });
       }
@@ -494,14 +718,24 @@
       renderFenceManagementList();
     }
 
-    // Panel de gestión completo con botones Ir, Mover aquí, Editar y Eliminar restaurados
+    // Panel de gestión: Ir, Mover aquí, Editar y Eliminar. Solo se vuelve a dibujar si algo cambió,
+    // así no parpadea cada 2 segundos ni pierde el foco.
     function renderFenceManagementList() {
       var ul = $('fenceList');
+      var estados = fences.map(function (f) { return f.id + ':' + (insideOf(f) ? 1 : 0); }).join(',');
+      var key = fencesKey + '|' + estados;
+
+      var insideNames = fences.filter(function (f) { return insideOf(f); }).map(function (f) { return f.nombre; });
+      if (!fences.length) { $('fenceStatus').textContent = 'Sin geocercas'; }
+      else if (insideNames.length) { $('fenceStatus').textContent = 'Dentro de: ' + insideNames.join(', '); }
+      else { $('fenceStatus').textContent = 'Fuera de todas las geocercas'; }
+
+      if (key === listKey) return;
+      listKey = key;
       ul.replaceChildren();
 
       if (!fences.length) {
         ul.appendChild(el('li', 'empty', 'Aún no hay geocercas creadas'));
-        $('fenceStatus').textContent = 'Sin geocercas';
         return;
       }
 
@@ -512,92 +746,28 @@
         var row = el('div', 'list-row');
         var left = el('div');
         left.appendChild(el('span', 'name', f.nombre));
-        left.appendChild(el('span', 'meta', f.tipo === 'poligono' ? 'Tipo: Polígono' : ('Radio: ' + Math.round(f.radio) + ' m')));
+        left.appendChild(el('span', 'meta', f.tipo === 'poligono'
+                ? 'Tipo: Polígono · ' + f.puntos.length + ' puntos'
+                : 'Radio: ' + Math.round(f.radio) + ' m'));
         row.appendChild(left);
         row.appendChild(el('span', 'chip ' + (dentro ? 'in' : 'out'), dentro ? 'Dentro' : 'Fuera'));
         li.appendChild(row);
 
         var actions = el('div', 'list-actions');
-
-        // Botón Ir
-        var btnGo = el('button', 'btn', 'Ir');
-        btnGo.style.minWidth = 'auto'; btnGo.style.padding = '4px 8px'; btnGo.style.fontSize = '0.7rem';
-        btnGo.onclick = function() {
-          var layer = fenceLayers[f.id];
-          if (layer) {
-            if (f.tipo === 'poligono') {
-              map.setView(layer.getBounds().getCenter(), 16, { animate: true });
-            } else {
-              map.setView([f.lat, f.lng], 16, { animate: true });
-            }
-          }
-        };
-
-        // Botón Mover aquí (solo para círculos o referencia de centro)
-        var btnMove = el('button', 'btn green', 'Mover aquí');
-        btnMove.style.minWidth = 'auto'; btnMove.style.padding = '4px 8px'; btnMove.style.fontSize = '0.7rem';
-        btnMove.onclick = function() {
-          if (!lastPos) { alert('No hay ubicación actual.'); return; }
-          if (f.tipo === 'circulo') {
-            fetch(DB + '/geocercas/' + f.id + '.json', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ latitude: lastPos[0], longitude: lastPos[1] })
-            }).then(function() { alert('Geocerca movida a tu ubicación.'); });
-          } else {
-            alert('Los polígonos personalizados se redibujan usando el botón "Dibujar zona".');
-          }
-        };
-
-        // Botón Editar nombre / radio
-        var btnEdit = el('button', 'btn', 'Editar');
-        btnEdit.style.minWidth = 'auto'; btnEdit.style.padding = '4px 8px'; btnEdit.style.fontSize = '0.7rem';
-        btnEdit.onclick = function() {
-          var nom = prompt('Nuevo nombre:', f.nombre);
-          if (nom === null) return;
-
-          if (f.tipo === 'circulo') {
-            var rad = Number(prompt('Nuevo radio en metros:', f.radio));
-            if (isNaN(rad) || rad <= 0) return;
-            fetch(DB + '/geocercas/' + f.id + '.json', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ nombre: nom, radio: rad })
-            }).then(function() { alert('Geocerca actualizada.'); });
-          } else {
-            fetch(DB + '/geocercas/' + f.id + '.json', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ nombre: nom })
-            }).then(function() { alert('Nombre actualizado.'); });
-          }
-        };
-
-        // Botón Eliminar
-        var btnDel = el('button', 'btn danger', 'Eliminar');
-        btnDel.style.minWidth = 'auto'; btnDel.style.padding = '4px 8px'; btnDel.style.fontSize = '0.7rem';
-        btnDel.onclick = function() {
-          if (confirm('¿Eliminar "' + f.nombre + '"?')) {
-            fetch(DB + '/geocercas/' + f.id + '.json', { method: 'DELETE' })
-                    .then(function() { alert('Geocerca eliminada.'); });
-          }
-        };
-
-        actions.appendChild(btnGo);
-        actions.appendChild(btnMove);
-        actions.appendChild(btnEdit);
-        actions.appendChild(btnDel);
+        actions.appendChild(boton('Ir', '', function () { irA(f); }));
+        actions.appendChild(boton('Mover aquí', 'green', function () { moverAqui(f); }));
+        actions.appendChild(boton('Editar', '', function () { editar(f); }));
+        actions.appendChild(boton('Eliminar', 'danger', function () { eliminar(f); }));
         li.appendChild(actions);
-
         ul.appendChild(li);
       });
+    }
 
-      var insideNames = fences.filter(function(f){ return insideOf(f); }).map(function(f){ return f.nombre; });
-      if (insideNames.length) {
-        $('fenceStatus').textContent = 'Dentro de: ' + insideNames.join(', ');
-      } else {
-        $('fenceStatus').textContent = 'Fuera de todas las geocercas';
-      }
+    function boton(texto, cls, fn) {
+      var b = el('button', 'btn mini' + (cls ? ' ' + cls : ''), texto);
+      b.type = 'button';
+      b.addEventListener('click', fn);
+      return b;
     }
 
     function updateFenceState() {
@@ -605,16 +775,71 @@
       fences.forEach(function (f) {
         var dentro = insideOf(f);
         var layer = fenceLayers[f.id];
-        if (layer) {
+        if (layer && layer._estado !== dentro) {      // solo se repinta si cambió el estado
+          layer._estado = dentro;
           var color = dentro ? COLOR_IN : COLOR_OUT;
           layer.setStyle({ color: color, fillColor: color });
         }
       });
     }
 
+    // ----- Acciones sobre las geocercas -----
+    function guardar(promesa, textoOk) {
+      return promesa.then(function () {
+        lastWriteAt = Date.now();
+        if (textoOk) msg(textoOk);
+        return getJSON('/geocercas.json').then(renderFences);
+      }).catch(function () {
+        msg('No se pudo guardar. Revisa tu conexión y las reglas de Firebase.', true);
+      });
+    }
+
+    function irA(f) {
+      setFollow(false);                               // si no, el seguimiento devolvería la vista a tu ubicación
+      var layer = fenceLayers[f.id];
+      if (layer) map.fitBounds(layer.getBounds(), { padding: [40, 40], maxZoom: 18 });
+    }
+
+    function moverAqui(f) {
+      if (!lastPos) { msg('No hay ubicación actual todavía.', true); return; }
+      var path = '/geocercas/' + encodeURIComponent(f.id) + '.json';
+      if (f.tipo === 'circulo') {
+        guardar(send('PATCH', path, { tipo: 'circulo', latitude: lastPos[0], longitude: lastPos[1] }), 'Geocerca movida a tu ubicación.');
+      } else {
+        // El polígono conserva su forma: se desplaza para que su centro quede en tu ubicación
+        var c = centroide(f.puntos);
+        var dLat = lastPos[0] - c[0], dLng = lastPos[1] - c[1];
+        var movidos = f.puntos.map(function (p) { return [p[0] + dLat, p[1] + dLng]; });
+        guardar(send('PATCH', path, cuerpoPoligono(f.nombre, movidos)), 'Zona movida a tu ubicación.');
+      }
+    }
+
+    function editar(f) {
+      var campos = [{ id: 'nombre', label: 'Nombre', type: 'text', value: f.nombre }];
+      if (f.tipo === 'circulo') {
+        campos.push({ id: 'radio', label: 'Radio en metros', type: 'number', value: Math.round(f.radio), min: 10, max: 100000 });
+      }
+      openDialog({ title: f.tipo === 'circulo' ? 'Editar círculo' : 'Renombrar zona', fields: campos }).then(function (r) {
+        if (!r) return;
+        var body = { nombre: limpiarNombre(r.nombre, f.nombre) };
+        if (f.tipo === 'circulo') body.radio = acotar(num(r.radio) || f.radio, 10, 100000);
+        guardar(send('PATCH', '/geocercas/' + encodeURIComponent(f.id) + '.json', body), 'Cambios guardados.');
+      });
+    }
+
+    function eliminar(f) {
+      openDialog({
+        title: 'Eliminar geocerca',
+        message: '¿Eliminar “' + f.nombre + '”? También desaparecerá de la app.',
+        okText: 'Eliminar',
+        danger: true
+      }).then(function (r) {
+        if (r) guardar(send('DELETE', '/geocercas/' + encodeURIComponent(f.id) + '.json'), 'Geocerca eliminada.');
+      });
+    }
+
+    // ----- Eventos -----
     function renderEvents(obj) {
-      var ul = $('eventList');
-      ul.replaceChildren();
       var items = [];
       if (obj && typeof obj === 'object') {
         Object.keys(obj).forEach(function (k) {
@@ -623,6 +848,12 @@
       }
       items.sort(function (a, b) { return a.k < b.k ? 1 : -1; });
 
+      var key = items.map(function (it) { return it.k; }).join(',');
+      if (key === eventsKey) return;     // sin eventos nuevos: no se redibuja
+      eventsKey = key;
+
+      var ul = $('eventList');
+      ul.replaceChildren();
       if (!items.length) {
         ul.appendChild(el('li', 'empty', 'Sin eventos todavía'));
         return;
@@ -641,19 +872,22 @@
       });
     }
 
+    // ----- Bucles de actualización -----
     function tick() {
+      var startedAt = Date.now();
       Promise.all([getJSON('/usuario_activo.json'), getJSON('/geocercas.json')])
               .then(function (res) {
                 connected = true;
                 renderUser(res[0]);
-                renderFences(res[1]);
+                // Si se guardó algo mientras esta lectura estaba en camino, se ignora: la próxima será más nueva
+                if (startedAt >= lastWriteAt) { renderFences(res[1]); }
               })
               .catch(function () { connected = false; })
               .finally(function () { refreshConn(); setTimeout(tick, POLL_MS); });
     }
 
     function tickEvents() {
-      getJSON('/eventos.json?orderBy="%24key"&limitToLast=8')
+      getJSON('/eventos.json?orderBy=%22%24key%22&limitToLast=8')
               .then(renderEvents)
               .catch(function () {})
               .finally(function () { setTimeout(tickEvents, EVENTS_MS); });
@@ -661,134 +895,134 @@
 
     // --- Controles de Botones ---
     $('btnFollow').onclick = function () {
-      followUser = !followUser;
-      this.textContent = followUser ? 'Seguir: Activo' : 'Seguir: Pausado';
-      this.classList.toggle('off', !followUser);
+      setFollow(!followUser);
+      if (followUser && lastPos) map.panTo(lastPos, { animate: false });
     };
 
     $('btnCenter').onclick = function () {
-      followUser = true;
-      $('btnFollow').textContent = 'Seguir: Activo';
-      $('btnFollow').classList.remove('off');
-      if (lastPos) map.setView(lastPos, 16, { animate: true });
+      setFollow(true);
+      if (lastPos) map.setView(lastPos, 16, { animate: false });
     };
 
     $('btnMode').onclick = function () {
       var nuevoModo = (currentMode === 'manual') ? 'GPS' : 'manual';
-      putJSON('/usuario_activo.json', { modo: nuevoModo }).then(function () {
+      send('PATCH', '/usuario_activo.json', { modo: nuevoModo }).then(function () {
         currentMode = nuevoModo;
         $('vMode').textContent = currentMode === 'manual' ? 'Manual' : 'GPS';
         $('btnMode').textContent = 'Modo: ' + (currentMode === 'manual' ? 'Manual' : 'GPS');
         if (nuevoModo === 'manual') {
-          alert('Modo manual activo: haz clic en cualquier parte del mapa para mover tu ubicación.');
+          msg('Modo manual: haz clic en el mapa para mover tu ubicación. Si la app está enviando GPS, su señal la reemplaza.');
         }
-      });
+      }).catch(function () { msg('No se pudo cambiar el modo.', true); });
     };
 
     $('btnCircle').onclick = function () {
-      var center = map.getCenter();
-      var nom = prompt('Nombre de la geocerca circular:', 'Geocerca Web');
-      if (!nom) return;
-      var rad = Number(prompt('Radio en metros:', '100')) || 50;
-
-      fetch(DB + '/geocercas.json', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: nom, latitude: center.lat, longitude: center.lng, radio: rad })
-      }).then(function() { alert('Geocerca circular creada.'); });
+      var c = lastPos ? { lat: lastPos[0], lng: lastPos[1] } : map.getCenter();
+      openDialog({
+        title: 'Nuevo círculo',
+        message: lastPos ? 'Se creará en tu ubicación actual.' : 'Se creará en el centro del mapa.',
+        fields: [
+          { id: 'nombre', label: 'Nombre', type: 'text', value: 'Geocerca Web' },
+          { id: 'radio', label: 'Radio en metros', type: 'number', value: 100, min: 10, max: 100000 }
+        ]
+      }).then(function (r) {
+        if (!r) return;
+        var nom = limpiarNombre(r.nombre, 'Geocerca Web');
+        var rad = acotar(num(r.radio) || 100, 10, 100000);
+        guardar(send('POST', '/geocercas.json', cuerpoCirculo(nom, c.lat, c.lng, rad)), 'Geocerca circular creada.');
+      });
     };
 
     // --- Dibujo de Polígonos por Puntos ---
     $('btnDraw').onclick = function () {
+      cleanupDrawing();
       isDrawing = true;
-      drawPoints = [];
-      tempMarkers = [];
+      map.doubleClickZoom.disable();     // un doble clic no debe añadir dos puntos y hacer zoom a la vez
       $('drawPanel').classList.add('active');
       $('drawInfo').textContent = 'Puntos: 0 (mínimo 3)';
       $('btnFinish').disabled = true;
-      alert('Modo dibujo por puntos activado: haz clic en el mapa para agregar vértices.');
+      msg('Dibujo activado: haz clic en el mapa para marcar los vértices de la zona.');
     };
 
-    map.on('click', function (e) {
-      if (currentMode === 'manual' && !isDrawing) {
-        putJSON('/usuario_activo.json', {
-          latitude: e.latlng.lat,
-          longitude: e.latlng.lng,
-          timestamp: Date.now(),
-          modo: 'manual'
-        });
-        return;
+    function actualizarDibujo() {
+      if (tempPolyline) { map.removeLayer(tempPolyline); tempPolyline = null; }
+      if (drawPoints.length > 1) {
+        tempPolyline = L.polyline(drawPoints, { color: '#e5484d', weight: 3, interactive: false }).addTo(map);
       }
+      $('drawInfo').textContent = 'Puntos: ' + drawPoints.length + ' (mínimo 3)';
+      $('btnFinish').disabled = drawPoints.length < 3;
+    }
 
+    // En modo manual, el clic mueve tu ubicación. Se espera un instante para no confundirlo con un doble clic
+    // (que sirve para hacer zoom): antes, hacer zoom con doble clic enviaba dos ubicaciones y el punto "saltaba".
+    var clickTimer = null;
+    map.on('click', function (e) {
       if (isDrawing) {
         drawPoints.push([e.latlng.lat, e.latlng.lng]);
-        var m = L.circleMarker(e.latlng, { radius: 6, color: '#e5484d', fillColor: '#ff8080', fillOpacity: 1 }).addTo(map);
-        tempMarkers.push(m);
-
-        if (tempPolyline) map.removeLayer(tempPolyline);
-        if (drawPoints.length > 1) {
-          tempPolyline = L.polyline(drawPoints, { color: '#e5484d', weight: 3 }).addTo(map);
-        }
-
-        $('drawInfo').textContent = 'Puntos: ' + drawPoints.length + ' (mínimo 3)';
-        if (drawPoints.length >= 3) { $('btnFinish').removeAttribute('disabled'); }
+        tempMarkers.push(L.circleMarker(e.latlng, { radius: 6, color: '#e5484d', fillColor: '#ff8080', fillOpacity: 1, interactive: false }).addTo(map));
+        actualizarDibujo();
+        return;
+      }
+      if (currentMode === 'manual') {
+        var ll = e.latlng;
+        clearTimeout(clickTimer);
+        clickTimer = setTimeout(function () { moverUbicacionManual(ll); }, 280);
       }
     });
+    map.on('dblclick', function () { clearTimeout(clickTimer); });
+
+    function moverUbicacionManual(ll) {
+      var ahora = Date.now();
+      // Respuesta inmediata en pantalla; después llega la lectura confirmada del servidor
+      renderUser({ latitude: ll.lat, longitude: ll.lng, timestamp: ahora, modo: 'manual' });
+      send('PATCH', '/usuario_activo.json', {
+        latitude: ll.lat,
+        longitude: ll.lng,
+        timestamp: { '.sv': 'timestamp' },   // hora del servidor
+        precision: null,                      // borra la precisión del GPS anterior
+        modo: 'manual'
+      }).catch(function () { msg('No se pudo enviar la ubicación manual.', true); });
+    }
 
     $('btnUndo').onclick = function () {
-      if (drawPoints.length > 0) {
-        drawPoints.pop();
-        var m = tempMarkers.pop();
-        if (m) map.removeLayer(m);
-        if (tempPolyline) map.removeLayer(tempPolyline);
-        if (drawPoints.length > 1) {
-          tempPolyline = L.polyline(drawPoints, { color: '#e5484d', weight: 3 }).addTo(map);
-        }
-        $('drawInfo').textContent = 'Puntos: ' + drawPoints.length + ' (mínimo 3)';
-        if (drawPoints.length < 3) { $('btnFinish').setAttribute('disabled', 'true'); }
-      }
+      if (!drawPoints.length) return;
+      drawPoints.pop();
+      var m = tempMarkers.pop();
+      if (m) map.removeLayer(m);
+      actualizarDibujo();
     };
 
-    $('btnCancel').onclick = function () {
-      cleanupDrawing();
-    };
+    $('btnCancel').onclick = function () { cleanupDrawing(); };
 
     $('btnFinish').onclick = function () {
       if (drawPoints.length < 3) return;
-      var nom = prompt('Nombre de la zona poligonal:', 'Zona Polígono Web');
-      if (!nom) return;
-
-      fetch(DB + '/geocercas.json', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nombre: nom,
-          puntos: drawPoints
-        })
-      }).then(function() {
-        alert('¡Polígono guardado con éxito!');
-        cleanupDrawing();
+      var pts = drawPoints.slice();
+      openDialog({
+        title: 'Nueva zona',
+        fields: [{ id: 'nombre', label: 'Nombre', type: 'text', value: 'Zona Polígono Web' }]
+      }).then(function (r) {
+        if (!r) return;                       // se queda dibujando para poder corregir
+        guardar(send('POST', '/geocercas.json', cuerpoPoligono(limpiarNombre(r.nombre, 'Zona Polígono Web'), pts)), 'Zona guardada con éxito.')
+                .then(cleanupDrawing);
       });
     };
 
     function cleanupDrawing() {
       isDrawing = false;
+      map.doubleClickZoom.enable();
       $('drawPanel').classList.remove('active');
-      tempMarkers.forEach(function(m){ map.removeLayer(m); });
+      tempMarkers.forEach(function (m) { map.removeLayer(m); });
       tempMarkers = [];
       if (tempPolyline) { map.removeLayer(tempPolyline); tempPolyline = null; }
       drawPoints = [];
     }
 
-    map.on('dragstart', function () {
-      if (followUser) {
-        followUser = false;
-        $('btnFollow').textContent = 'Seguir: Pausado';
-        $('btnFollow').classList.add('off');
-      }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && isDrawing && !$('dlg').open) cleanupDrawing();
     });
 
     setInterval(refreshConn, 1000);
+    renderEvents(null);
     tick();
     tickEvents();
   })();
