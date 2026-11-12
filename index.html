@@ -181,7 +181,7 @@
       <span class="orb" aria-hidden="true"></span>
       <div>
         <h1>Geocorez</h1>
-        <p>Control Total Web (Dibujo por puntos, Modo Manual y Edición)</p>
+        <p>Control Total Web (Polígonos y Círculos sincronizados)</p>
       </div>
     </div>
     <div class="pill" id="conn" role="status" aria-live="polite">
@@ -202,7 +202,7 @@
         <button class="btn green" id="btnDraw" type="button">Dibujar zona</button>
       </div>
 
-      <!-- Panel flotante idéntico al móvil para dibujar polígonos por puntos -->
+      <!-- Panel flotante para dibujar polígonos -->
       <div class="draw-panel" id="drawPanel">
         <p id="drawInfo">Puntos: 0 (mínimo 3)</p>
         <div style="display: flex; gap: 6px;">
@@ -283,7 +283,7 @@
     var fencesKey = '';
     var currentMode = 'GPS';
 
-    // Variables para el modo de dibujo por puntos (polígono)
+    // Variables para dibujo de polígonos
     var isDrawing = false;
     var drawPoints = [];
     var tempMarkers = [];
@@ -362,8 +362,26 @@
       updateFenceState();
     }
 
+    // Algoritmo Ray-Casting para saber si el punto está dentro de un polígono irregular
+    function isPointInPolygon(point, polygon) {
+      var x = point[0], y = point[1];
+      var inside = false;
+      for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        var xi = polygon[i][0], yi = polygon[i][1];
+        var xj = polygon[j][0], yj = polygon[j][1];
+        var intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+
     function insideOf(f) {
-      return !!lastPos && map.distance(lastPos, [f.lat, f.lng]) <= f.radio;
+      if (!lastPos) return false;
+      if (f.puntos && Array.isArray(f.puntos) && f.puntos.length >= 3) {
+        return isPointInPolygon(lastPos, f.puntos);
+      }
+      // Compatibilidad con círculos antiguos si no tienen puntos de polígono
+      return map.distance(lastPos, [f.lat, f.lng]) <= (f.radio || 50);
     }
 
     function renderFences(g) {
@@ -372,9 +390,16 @@
         Object.keys(g).forEach(function (id) {
           var v = g[id];
           if (!v || typeof v !== 'object') return;
-          var lat = num(v.latitude), lng = num(v.longitude), r = num(v.radio);
-          if (lat === null || lng === null || r === null) return;
-          list.push({ id: id, nombre: String(v.nombre || 'Geocerca').slice(0, 60), lat: lat, lng: lng, radio: r });
+          var nombre = String(v.nombre || 'Geocerca').slice(0, 60);
+
+          if (v.puntos && Array.isArray(v.puntos) && v.puntos.length >= 3) {
+            list.push({ id: id, nombre: nombre, puntos: v.puntos, tipo: 'poligono' });
+          } else {
+            var lat = num(v.latitude), lng = num(v.longitude), r = num(v.radio);
+            if (lat !== null && lng !== null && r !== null) {
+              list.push({ id: id, nombre: nombre, lat: lat, lng: lng, radio: r, tipo: 'circulo' });
+            }
+          }
         });
       }
       var key = JSON.stringify(list);
@@ -384,16 +409,21 @@
         Object.keys(fenceLayers).forEach(function (id) { map.removeLayer(fenceLayers[id]); });
         fenceLayers = {};
         fences.forEach(function (f) {
-          var c = L.circle([f.lat, f.lng], { radius: f.radio, weight: 2, fillOpacity: .22 }).addTo(map);
-          c.bindTooltip(f.nombre + ' · ' + Math.round(f.radio) + ' m', { direction: 'top', className: 'fence-label' });
-          fenceLayers[f.id] = c;
+          var layer;
+          if (f.tipo === 'poligono') {
+            layer = L.polygon(f.puntos, { weight: 2, fillOpacity: .22 }).addTo(map);
+            layer.bindTooltip(f.nombre, { direction: 'top', className: 'fence-label' });
+          } else {
+            layer = L.circle([f.lat, f.lng], { radius: f.radio, weight: 2, fillOpacity: .22 }).addTo(map);
+            layer.bindTooltip(f.nombre + ' · ' + Math.round(f.radio) + ' m', { direction: 'top', className: 'fence-label' });
+          }
+          fenceLayers[f.id] = layer;
         });
       }
       updateFenceState();
       renderFenceManagementList();
     }
 
-    // Panel lateral de gestión completo con botones de Ir, Mover aquí, Editar y Eliminar
     function renderFenceManagementList() {
       var ul = $('fenceList');
       ul.replaceChildren();
@@ -411,7 +441,7 @@
         var row = el('div', 'list-row');
         var left = el('div');
         left.appendChild(el('span', 'name', f.nombre));
-        left.appendChild(el('span', 'meta', 'Radio: ' + Math.round(f.radio) + ' m'));
+        left.appendChild(el('span', 'meta', f.tipo === 'poligono' ? 'Tipo: Polígono' : ('Radio: ' + Math.round(f.radio) + ' m')));
         row.appendChild(left);
         row.appendChild(el('span', 'chip ' + (dentro ? 'in' : 'out'), dentro ? 'Dentro' : 'Fuera'));
         li.appendChild(row);
@@ -420,32 +450,9 @@
 
         var btnGo = el('button', 'btn', 'Ir');
         btnGo.style.minWidth = 'auto'; btnGo.style.padding = '4px 8px'; btnGo.style.fontSize = '0.7rem';
-        btnGo.onclick = function() { map.setView([f.lat, f.lng], 16, { animate: true }); };
-
-        var btnMove = el('button', 'btn green', 'Mover aquí');
-        btnMove.style.minWidth = 'auto'; btnMove.style.padding = '4px 8px'; btnMove.style.fontSize = '0.7rem';
-        btnMove.onclick = function() {
-          if (!lastPos) { alert('No hay ubicación actual.'); return; }
-          fetch(DB + '/geocercas/' + f.id + '.json', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ latitude: lastPos[0], longitude: lastPos[1] })
-          }).then(function() { alert('Geocerca movida a tu ubicación.'); });
-        };
-
-        var btnEdit = el('button', 'btn', 'Editar');
-        btnEdit.style.minWidth = 'auto'; btnEdit.style.padding = '4px 8px'; btnEdit.style.fontSize = '0.7rem';
-        btnEdit.onclick = function() {
-          var nom = prompt('Nuevo nombre:', f.nombre);
-          if (nom === null) return;
-          var rad = Number(prompt('Nuevo radio en metros:', f.radio));
-          if (isNaN(rad) || rad <= 0) return;
-
-          fetch(DB + '/geocercas/' + f.id + '.json', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nombre: nom, radio: rad })
-          }).then(function() { alert('Geocerca actualizada.'); });
+        btnGo.onclick = function() {
+          var layer = fenceLayers[f.id];
+          if (layer) map.setView(layer.getBounds().getCenter(), 16, { animate: true });
         };
 
         var btnDel = el('button', 'btn danger', 'Eliminar');
@@ -458,8 +465,6 @@
         };
 
         actions.appendChild(btnGo);
-        actions.appendChild(btnMove);
-        actions.appendChild(btnEdit);
         actions.appendChild(btnDel);
         li.appendChild(actions);
 
@@ -571,7 +576,7 @@
       }).then(function() { alert('Geocerca circular creada.'); });
     };
 
-    // --- Lógica de Dibujo por Puntos (Polígono idéntico a la app móvil) ---
+    // --- Dibujo de Polígonos por Puntos ---
     $('btnDraw').onclick = function () {
       isDrawing = true;
       drawPoints = [];
@@ -594,7 +599,7 @@
       }
 
       if (isDrawing) {
-        drawPoints.push(e.latlng);
+        drawPoints.push([e.latlng.lat, e.latlng.lng]);
         var m = L.circleMarker(e.latlng, { radius: 6, color: '#e5484d', fillColor: '#ff8080', fillOpacity: 1 }).addTo(map);
         tempMarkers.push(m);
 
@@ -604,7 +609,6 @@
         }
 
         $('drawInfo').textContent = 'Puntos: ' + drawPoints.length + ' (mínimo 3)';
-        $('btnFinish.disabled', false);
         if (drawPoints.length >= 3) { $('btnFinish').removeAttribute('disabled'); }
       }
     });
@@ -629,26 +633,18 @@
 
     $('btnFinish').onclick = function () {
       if (drawPoints.length < 3) return;
-      var nom = prompt('Nombre de la zona dibujada:', 'Zona Polígono Web');
+      var nom = prompt('Nombre de la zona poligonal:', 'Zona Polígono Web');
       if (!nom) return;
-
-      // Calcular centro promedio del polígono y radio aproximado
-      var sumLat = 0, sumLng = 0;
-      drawPoints.forEach(function(p){ sumLat += p.lat; sumLng += p.lng; });
-      var centerLat = sumLat / drawPoints.length;
-      var centerLng = sumLng / drawPoints.length;
-      var maxDist = 50;
-      drawPoints.forEach(function(p){
-        var d = map.distance([centerLat, centerLng], p);
-        if (d > maxDist) maxDist = d;
-      });
 
       fetch(DB + '/geocercas.json', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: nom, latitude: centerLat, longitude: centerLng, radio: Math.round(maxDist) })
+        body: JSON.stringify({
+          nombre: nom,
+          puntos: drawPoints
+        })
       }).then(function() {
-        alert('¡Zona dibujada guardada con éxito!');
+        alert('¡Polígono guardado con éxito!');
         cleanupDrawing();
       });
     };
