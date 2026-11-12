@@ -181,7 +181,7 @@
       <span class="orb" aria-hidden="true"></span>
       <div>
         <h1>Geocorez</h1>
-        <p>Control Total Web (Polígonos y Círculos sincronizados)</p>
+        <p>Control Total Web (Polígonos y Gestión Completa)</p>
       </div>
     </div>
     <div class="pill" id="conn" role="status" aria-live="polite">
@@ -362,7 +362,7 @@
       updateFenceState();
     }
 
-    // Algoritmo Ray-Casting para saber si el punto está dentro de un polígono irregular
+    // Algoritmo Ray-Casting para verificar si está dentro de un polígono irregular
     function isPointInPolygon(point, polygon) {
       var x = point[0], y = point[1];
       var inside = false;
@@ -380,7 +380,6 @@
       if (f.puntos && Array.isArray(f.puntos) && f.puntos.length >= 3) {
         return isPointInPolygon(lastPos, f.puntos);
       }
-      // Compatibilidad con círculos antiguos si no tienen puntos de polígono
       return map.distance(lastPos, [f.lat, f.lng]) <= (f.radio || 50);
     }
 
@@ -424,6 +423,7 @@
       renderFenceManagementList();
     }
 
+    // Panel de gestión completo con botones Ir, Mover aquí, Editar y Eliminar restaurados
     function renderFenceManagementList() {
       var ul = $('fenceList');
       ul.replaceChildren();
@@ -448,13 +448,61 @@
 
         var actions = el('div', 'list-actions');
 
+        // Botón Ir
         var btnGo = el('button', 'btn', 'Ir');
         btnGo.style.minWidth = 'auto'; btnGo.style.padding = '4px 8px'; btnGo.style.fontSize = '0.7rem';
         btnGo.onclick = function() {
           var layer = fenceLayers[f.id];
-          if (layer) map.setView(layer.getBounds().getCenter(), 16, { animate: true });
+          if (layer) {
+            if (f.tipo === 'poligono') {
+              map.setView(layer.getBounds().getCenter(), 16, { animate: true });
+            } else {
+              map.setView([f.lat, f.lng], 16, { animate: true });
+            }
+          }
         };
 
+        // Botón Mover aquí (solo para círculos o referencia de centro)
+        var btnMove = el('button', 'btn green', 'Mover aquí');
+        btnMove.style.minWidth = 'auto'; btnMove.style.padding = '4px 8px'; btnMove.style.fontSize = '0.7rem';
+        btnMove.onclick = function() {
+          if (!lastPos) { alert('No hay ubicación actual.'); return; }
+          if (f.tipo === 'circulo') {
+            fetch(DB + '/geocercas/' + f.id + '.json', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ latitude: lastPos[0], longitude: lastPos[1] })
+            }).then(function() { alert('Geocerca movida a tu ubicación.'); });
+          } else {
+            alert('Los polígonos personalizados se redibujan usando el botón "Dibujar zona".');
+          }
+        };
+
+        // Botón Editar nombre / radio
+        var btnEdit = el('button', 'btn', 'Editar');
+        btnEdit.style.minWidth = 'auto'; btnEdit.style.padding = '4px 8px'; btnEdit.style.fontSize = '0.7rem';
+        btnEdit.onclick = function() {
+          var nom = prompt('Nuevo nombre:', f.nombre);
+          if (nom === null) return;
+
+          if (f.tipo === 'circulo') {
+            var rad = Number(prompt('Nuevo radio en metros:', f.radio));
+            if (isNaN(rad) || rad <= 0) return;
+            fetch(DB + '/geocercas/' + f.id + '.json', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ nombre: nom, radio: rad })
+            }).then(function() { alert('Geocerca actualizada.'); });
+          } else {
+            fetch(DB + '/geocercas/' + f.id + '.json', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ nombre: nom })
+            }).then(function() { alert('Nombre actualizado.'); });
+          }
+        };
+
+        // Botón Eliminar
         var btnDel = el('button', 'btn danger', 'Eliminar');
         btnDel.style.minWidth = 'auto'; btnDel.style.padding = '4px 8px'; btnDel.style.fontSize = '0.7rem';
         btnDel.onclick = function() {
@@ -465,6 +513,8 @@
         };
 
         actions.appendChild(btnGo);
+        actions.appendChild(btnMove);
+        actions.appendChild(btnEdit);
         actions.appendChild(btnDel);
         li.appendChild(actions);
 
