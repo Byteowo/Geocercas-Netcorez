@@ -162,6 +162,36 @@
     }
     .leaflet-container a { color: var(--blue-bottom); }
 
+    /* Avisos de entrada y salida de geocercas */
+    .toasts {
+      position: fixed; top: 112px; left: 50%; transform: translateX(-50%); z-index: 3000;
+      display: flex; flex-direction: column; gap: 10px; align-items: center;
+      width: min(92vw, 420px); pointer-events: none;
+    }
+    .toast {
+      pointer-events: auto; cursor: pointer; width: 100%;
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,.97), rgba(205,239,255,.92));
+      border: 1.5px solid #fff;
+      box-shadow: 0 10px 28px rgba(20,100,150,.35), inset 0 1px 0 #fff;
+      animation: toast-in .3s ease-out;
+      transition: opacity .3s, transform .3s;
+    }
+    .toast.leaving { opacity: 0; transform: translateY(-8px); }
+    .toast .ico {
+      width: 36px; height: 36px; flex: none; border-radius: 50%;
+      display: grid; place-items: center; color: #fff; font-size: 1.15rem; font-weight: 800;
+      border: 2px solid #fff; box-shadow: 0 3px 8px rgba(20,100,150,.35);
+      text-shadow: 0 1px 2px rgba(0,0,0,.3);
+    }
+    .toast.in .ico { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); }
+    .toast.out .ico { background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom)); }
+    .toast .txt { display: flex; flex-direction: column; min-width: 0; }
+    .toast .txt strong { font-size: .95rem; overflow-wrap: anywhere; }
+    .toast .txt .when { font-size: .75rem; color: var(--soft); }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(-10px) scale(.96); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
     footer { text-align: center; font-size: .75rem; color: var(--soft); margin-top: 14px; }
 
     @media (max-width: 860px) {
@@ -169,11 +199,13 @@
       .mapwrap { height: 58vh; min-height: 340px; }
       .side { overflow: visible; }
       .topbar { flex-wrap: wrap; }
+      .toasts { top: 8px; }
     }
   </style>
 </head>
 <body>
 <div class="bubbles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 
 <div class="app">
   <header class="glass topbar">
@@ -282,6 +314,7 @@
     var fenceLayers = {};
     var fencesKey = '';
     var currentMode = 'GPS';
+    var insideState = {};   // último estado conocido de cada geocerca (true = dentro) para detectar entradas y salidas
 
     // Variables para dibujo de polígonos
     var isDrawing = false;
@@ -381,6 +414,42 @@
         return isPointInPolygon(lastPos, f.puntos);
       }
       return map.distance(lastPos, [f.lat, f.lng]) <= (f.radio || 50);
+    }
+
+    // Muestra un aviso en pantalla: tipo 'in' (entrada) o 'out' (salida)
+    function notify(tipo, nombre) {
+      var box = $('toasts');
+      var t = el('div', 'toast ' + tipo);
+      t.setAttribute('role', 'status');
+      var txt = el('div', 'txt');
+      txt.appendChild(el('strong', '', (tipo === 'in' ? 'Entraste a “' : 'Saliste de “') + nombre + '”'));
+      txt.appendChild(el('span', 'when', new Date().toLocaleTimeString('es-BO')));
+      t.appendChild(el('span', 'ico', tipo === 'in' ? '→' : '←'));
+      t.appendChild(txt);
+
+      function close() {
+        t.classList.add('leaving');
+        setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+      }
+      t.addEventListener('click', close);
+      box.appendChild(t);
+      while (box.children.length > 4) box.removeChild(box.firstChild);
+      setTimeout(close, 7000);
+    }
+
+    // Compara dónde estás ahora con el estado anterior de cada geocerca y avisa si cambió
+    function checkTransitions() {
+      if (!lastPos) return;
+      var vistos = {};
+      fences.forEach(function (f) {
+        var dentro = insideOf(f);
+        var antes = insideState[f.id];
+        vistos[f.id] = true;
+        // Sin estado previo (primera carga o geocerca nueva): se registra sin avisar
+        if (antes !== undefined && antes !== dentro) notify(dentro ? 'in' : 'out', f.nombre);
+        insideState[f.id] = dentro;
+      });
+      Object.keys(insideState).forEach(function (id) { if (!vistos[id]) delete insideState[id]; });
     }
 
     function renderFences(g) {
@@ -530,6 +599,7 @@
     }
 
     function updateFenceState() {
+      checkTransitions();
       fences.forEach(function (f) {
         var dentro = insideOf(f);
         var layer = fenceLayers[f.id];
