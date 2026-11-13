@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mapa en tiempo real · Geocorez</title>
-  <meta name="description" content="Seguimiento en tiempo real de la ubicación y las geocercas de Geocorez.">
+  <meta name="description" content="Seguimiento en tiempo real de los punteros y las geocercas de Geocorez.">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <style>
     :root {
@@ -14,6 +14,8 @@
       --blue-bottom: #1e9be8;
       --green-top: #b8f26b;
       --green-bottom: #3fae2a;
+      --red-top: #ff9a8f;
+      --red-bottom: #e5484d;
       --ok: #35b82a;
       --warn: #f0a30a;
       --bad: #e5484d;
@@ -79,11 +81,13 @@
     .pill.stale .dot { background: var(--warn); box-shadow: 0 0 0 3px rgba(240,163,10,.28); }
     .pill.off .dot { background: var(--bad); box-shadow: 0 0 0 3px rgba(229,72,77,.25); }
 
-    /* Distribución */
-
-    .layout { display: flex; flex-direction: row; gap: 16px; height: calc(100vh - 118px); min-height: 540px; }
-    .mapwrap { position: relative; flex: 1; overflow: hidden; padding: 6px; display: flex; }
-    #map { width: 100%; height: 100%; border-radius: 15px; background: #cfeaf7; z-index: 1; }
+    /* Distribución: la columna derecha tiene ancho FIJO para que el mapa nunca cambie de tamaño
+       cuando cambia el contenido de los paneles (eso desajustaba las capas de Leaflet). */
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; height: calc(100vh - 118px); min-height: 540px; }
+    /* El contenedor del mapa NO usa desenfoque de fondo: el backdrop-filter en un ancestro del mapa
+       provoca desajustes de las capas vectoriales durante el zoom en algunos navegadores. */
+    .mapwrap { position: relative; overflow: hidden; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    #map { position: absolute; inset: 6px; border-radius: 15px; background: #cfeaf7; z-index: 0; }
 
     /* Botones flotantes interactivos */
     .mapbtns { position: absolute; right: 18px; top: 18px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
@@ -91,16 +95,18 @@
     /* Panel flotante de dibujo activo */
     .draw-panel {
       position: absolute; left: 18px; bottom: 24px; z-index: 1000; display: none;
-      background: rgba(255, 255, 255, 0.92); padding: 12px 16px; border-radius: 16px;
+      background: rgba(255, 255, 255, 0.94); padding: 12px 16px; border-radius: 16px;
       border: 1.5px solid #fff; box-shadow: 0 6px 20px rgba(20,100,150,.3);
-      backdrop-filter: blur(8px); flex-direction: column; gap: 8px; min-width: 220px;
+      flex-direction: column; gap: 8px; min-width: 220px;
     }
     .draw-panel.active { display: flex; }
     .draw-panel p { margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--deep); }
 
-    .side { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding: 2px; min-height: 0; }
-    .card { padding: 16px 18px; }
+    .side { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding: 2px; min-height: 0; min-width: 0; }
+    .card { padding: 16px 18px; flex: none; }
     h2 { margin: 0 0 10px; font-size: .95rem; text-transform: uppercase; letter-spacing: .8px; color: var(--soft); }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .card-head h2 { margin: 0; }
 
     /* Botones tipo gel frutiger aero */
     .btn {
@@ -119,9 +125,12 @@
     }
     .btn.green { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); text-shadow: 0 1px 2px rgba(36,107,20,.6); }
     .btn.off { background: linear-gradient(180deg, #d9e6ee, #9db4c2); text-shadow: 0 1px 2px rgba(40,70,90,.5); }
-    .btn.danger { background: linear-gradient(180deg, #ff8080, #e5484d); text-shadow: 0 1px 2px rgba(100,20,20,.6); }
+    .btn.danger { background: linear-gradient(180deg, var(--red-top), var(--red-bottom)); text-shadow: 0 1px 2px rgba(100,20,20,.6); }
     .btn:hover { filter: brightness(1.06); }
     .btn:active { transform: translateY(1px); filter: brightness(.95); }
+    .btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px var(--blue-bottom); }
+    .btn:disabled { opacity: .55; cursor: not-allowed; filter: grayscale(.4); }
+    .btn.mini { min-width: auto; padding: 4px 10px; font-size: .7rem; }
 
     /* Datos */
     dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; }
@@ -129,33 +138,48 @@
     dd { margin: 0; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
     .list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .card-head + .list { margin-top: 0; }
     .list li {
       display: flex; flex-direction: column; gap: 6px;
       padding: 10px 12px; border-radius: 14px; font-size: .85rem;
       background: rgba(255,255,255,.75); border: 1.5px solid rgba(255,255,255,.95);
     }
+    .list li.sel { border-color: var(--c, var(--blue-bottom)); box-shadow: 0 0 0 2px var(--c, var(--blue-bottom)); }
     .list-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .list-actions { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .list .name { font-weight: 700; overflow-wrap: anywhere; }
-    .list .meta { display: block; font-weight: 400; font-size: .75rem; color: var(--soft); }
+    .list .meta { display: block; font-weight: 400; font-size: .75rem; color: var(--soft); overflow-wrap: anywhere; }
     .list .empty { justify-content: center; color: var(--soft); }
     .chip { flex: none; padding: 3px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.25); }
     .chip.in { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); }
     .chip.out { background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom)); }
-    .status-line { font-weight: 700; }
+    .chip.none { background: linear-gradient(180deg, #d9e6ee, #9db4c2); }
+    .status-line { font-weight: 700; overflow-wrap: anywhere; }
 
-    /* Marcador y animaciones */
-    .pin { position: relative; width: 28px; height: 28px; }
+    /* Punto de color de cada puntero y etiquetas de asignación */
+    .cdot {
+      display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; flex: none;
+      border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); vertical-align: middle;
+    }
+    .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tag { padding: 2px 8px; border-radius: 999px; font-size: .68rem; font-weight: 700; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.35); overflow-wrap: anywhere; }
+    .tag.none { background: #9db4c2; }
+
+    /* Marcador de puntero (el color llega en --c) y animaciones */
+    .pin { position: relative; width: 28px; height: 28px; --c: #e53935; }
     .pin span {
       position: absolute; inset: 4px; border-radius: 50%;
-      background: radial-gradient(circle at 32% 28%, #f4ffd9 0%, #8fe04a 40%, #2fb52a 100%);
-      border: 2.5px solid #fff; box-shadow: 0 3px 8px rgba(0,60,20,.45);
+      background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.9) 0%, var(--c) 50%, var(--c) 100%);
+      border: 2.5px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,.4);
     }
     .pin::after {
       content: ""; position: absolute; inset: 0; border-radius: 50%;
-      border: 2px solid rgba(53,184,42,.7); animation: pulse 2s ease-out infinite;
+      border: 2px solid var(--c); opacity: 0;
     }
+    .pin.sel span { inset: 2px; }
+    .pin.sel::after { animation: pulse 2s ease-out infinite; }
     @keyframes pulse { 0% { transform: scale(.7); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .pin.sel::after { animation: none; opacity: 0; } }
 
     .leaflet-tooltip.fence-label {
       background: rgba(255,255,255,.92); border: 1px solid #fff; border-radius: 10px;
@@ -163,7 +187,7 @@
     }
     .leaflet-container a { color: var(--blue-bottom); }
 
-    /* Avisos de entrada y salida de geocercas */
+    /* Avisos (entradas, salidas y mensajes) */
     .toasts {
       position: fixed; top: 112px; left: 50%; transform: translateX(-50%); z-index: 3000;
       display: flex; flex-direction: column; gap: 10px; align-items: center;
@@ -185,19 +209,41 @@
       border: 2px solid #fff; box-shadow: 0 3px 8px rgba(20,100,150,.35);
       text-shadow: 0 1px 2px rgba(0,0,0,.3);
     }
-    .toast.in .ico { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); }
+    .toast.in .ico, .toast.ok .ico { background: linear-gradient(180deg, var(--green-top), var(--green-bottom)); }
     .toast.out .ico { background: linear-gradient(180deg, var(--blue-top), var(--blue-bottom)); }
+    .toast.err .ico { background: linear-gradient(180deg, var(--red-top), var(--red-bottom)); }
     .toast .txt { display: flex; flex-direction: column; min-width: 0; }
-    .toast .txt strong { font-size: .95rem; overflow-wrap: anywhere; }
+    .toast .txt strong { font-size: .92rem; overflow-wrap: anywhere; }
     .toast .txt .when { font-size: .75rem; color: var(--soft); }
     @keyframes toast-in { from { opacity: 0; transform: translateY(-10px) scale(.96); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+    /* Diálogo (reemplaza a prompt / confirm / alert) */
+    dialog { border: none; padding: 0; background: transparent; max-width: calc(100% - 28px); width: 400px; }
+    dialog::backdrop { background: rgba(11,79,108,.38); }
+    .dlg { padding: 22px; background: linear-gradient(180deg, #fff, #d9f2ff); border: 2px solid #8fd3f4; border-radius: 24px; box-shadow: 0 20px 50px rgba(11,79,108,.4); color: var(--deep); }
+    .dlg h3 { margin: 0 0 12px; font-size: 1.1rem; }
+    .dlg-msg { margin: 0 0 14px; color: var(--soft); overflow-wrap: anywhere; }
+    .field { display: block; margin-bottom: 12px; }
+    .field span { display: block; font-size: .8rem; font-weight: 700; color: var(--soft); margin-bottom: 4px; }
+    .field input {
+      width: 100%; padding: 10px 12px; border-radius: 12px; border: 1.5px solid #9fd6f0; background: #fff;
+      font: inherit; color: var(--deep);
+    }
+    .field input:focus { outline: 3px solid rgba(30,155,232,.35); border-color: var(--blue-bottom); }
+    .checks { margin-bottom: 12px; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+    .checks .checks-title { font-size: .8rem; font-weight: 700; color: var(--soft); }
+    .chk { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,.8); border: 1.5px solid #cfeaf7; cursor: pointer; }
+    .chk input { width: 18px; height: 18px; flex: none; }
+    .chk span { overflow-wrap: anywhere; font-weight: 600; font-size: .9rem; }
+    .dlg-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+    .dlg-actions .btn { min-width: 100px; }
 
     footer { text-align: center; font-size: .75rem; color: var(--soft); margin-top: 14px; }
 
     @media (max-width: 860px) {
       .layout { grid-template-columns: 1fr; height: auto; }
-      .mapwrap { height: 58vh; min-height: 340px; }
+      .mapwrap { height: 62vh; min-height: 360px; }
       .side { overflow: visible; }
       .topbar { flex-wrap: wrap; }
       .toasts { top: 8px; }
@@ -214,7 +260,7 @@
       <span class="orb" aria-hidden="true"></span>
       <div>
         <h1>Geocorez</h1>
-        <p>Control Total Web (Polígonos y Gestión Completa)</p>
+        <p>Control Total Web (Punteros, Polígonos y Gestión Completa)</p>
       </div>
     </div>
     <div class="pill" id="conn" role="status" aria-live="polite">
@@ -231,6 +277,7 @@
         <button class="btn" id="btnFollow" type="button">Seguir: Activo</button>
         <button class="btn" id="btnCenter" type="button">Centrar</button>
         <button class="btn green" id="btnMode" type="button">Modo: GPS</button>
+        <button class="btn green" id="btnPointer" type="button">+ Puntero</button>
         <button class="btn green" id="btnCircle" type="button">+ Círculo</button>
         <button class="btn green" id="btnDraw" type="button">Dibujar zona</button>
       </div>
@@ -239,22 +286,32 @@
       <div class="draw-panel" id="drawPanel">
         <p id="drawInfo">Puntos: 0 (mínimo 3)</p>
         <div style="display: flex; gap: 6px;">
-          <button class="btn" id="btnUndo" type="button" style="padding: 6px 10px; font-size: 0.75rem;">Deshacer</button>
-          <button class="btn green" id="btnFinish" type="button" style="padding: 6px 10px; font-size: 0.75rem;" disabled>Terminar</button>
-          <button class="btn danger" id="btnCancel" type="button" style="padding: 6px 10px; font-size: 0.75rem;">Cancelar</button>
+          <button class="btn mini" id="btnUndo" type="button">Deshacer</button>
+          <button class="btn green mini" id="btnFinish" type="button" disabled>Terminar</button>
+          <button class="btn danger mini" id="btnCancel" type="button">Cancelar</button>
         </div>
       </div>
     </section>
 
     <aside class="side" aria-label="Información">
       <section class="glass card">
-        <h2>Ubicación actual</h2>
+        <h2>Puntero seleccionado</h2>
         <dl>
+          <dt>Puntero</dt><dd id="vPtr">—</dd>
           <dt>Latitud</dt><dd id="vLat">—</dd>
           <dt>Longitud</dt><dd id="vLng">—</dd>
           <dt>Modo</dt><dd id="vMode">—</dd>
+          <dt>Precisión</dt><dd id="vAcc">—</dd>
           <dt>Actualizado</dt><dd id="vAge">—</dd>
         </dl>
+      </section>
+
+      <section class="glass card">
+        <div class="card-head">
+          <h2>Punteros</h2>
+          <button class="btn green mini" id="btnPointer2" type="button">+ Nuevo</button>
+        </div>
+        <ul class="list" id="pointerList"></ul>
       </section>
 
       <section class="glass card">
@@ -273,6 +330,17 @@
   <footer>Geocorez · Sincronización Web & Móvil con Mapbox y Firebase</footer>
 </div>
 
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <form class="dlg" id="dlgForm">
+    <h3 id="dlgTitle"></h3>
+    <div id="dlgBody"></div>
+    <div class="dlg-actions">
+      <button class="btn" id="dlgCancel" type="button">Cancelar</button>
+      <button class="btn green" id="dlgOk" type="submit">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
   (function () {
@@ -283,15 +351,35 @@
     var EVENTS_MS = 5000;
     var STALE_MS = 30000;
 
+    var MAX_PRECISION_M = 50;          // una lectura con más error que esto no sirve para decidir entradas o salidas
+    var LECTURAS_PARA_CONFIRMAR = 2;   // lecturas nuevas seguidas necesarias para confirmar una entrada o salida
+
     var COLOR_IN = '#35b82a';
     var COLOR_OUT = '#1e9be8';
+
+    // Colores de los punteros (los mismos que usa la app)
+    var PALETA = ['#E53935', '#8E24AA', '#FB8C00', '#6D4C41', '#D81B60', '#F9A825', '#546E7A', '#AD1457'];
 
     var $ = function (id) { return document.getElementById(id); };
 
     var map = L.map('map').setView([-16.5, -68.15], 13);
-    setTimeout(function() { map.invalidateSize(); }, 200);
 
-    var MAPBOX_TOKEN = 'pk.eyJ1IjoieW9zaGljb3JlIiwiYSI6ImNtd2NvcTFobTA0bW4zMG85cG9mc2E2cWwifQ.L6gUJs7fyQ_ewHSXad6TLw'; // Reemplaza por tu token real
+    // Leaflet solo se entera del tamaño de la ventana, no del tamaño real del contenedor.
+    // Este observador le avisa cada vez que el contenedor cambia, para que las capas no se desajusten.
+    var resizePendiente = false;
+    function ajustarTamano() {
+      if (resizePendiente) return;
+      resizePendiente = true;
+      requestAnimationFrame(function () {
+        resizePendiente = false;
+        map.invalidateSize({ animate: false, pan: false });
+      });
+    }
+    if (window.ResizeObserver) { new ResizeObserver(ajustarTamano).observe($('map')); }
+    window.addEventListener('resize', ajustarTamano);
+    window.addEventListener('load', ajustarTamano);
+
+    var MAPBOX_TOKEN = 'pk.eyJ1IjoieW9zaGljb3JlIiwiYSI6ImNtd2NvcTFobTA0bW4zMG85cG9mc2E2cWwifQ.L6gUJs7fyQ_ewHSXad6TLw';
 
     L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}{r}?access_token=' + MAPBOX_TOKEN, {
       tileSize: 512,
@@ -300,23 +388,35 @@
       attribution: '&copy; Mapbox'
     }).addTo(map);
 
-    var pinIcon = L.divIcon({
-      className: '',
-      html: '<div class="pin"><span></span></div>',
-      iconSize: [28, 28],
-      iconAnchor: [14, 14]
-    });
+    function pinIcon(color, seleccionado) {
+      return L.divIcon({
+        className: '',
+        html: '<div class="pin' + (seleccionado ? ' sel' : '') + '" style="--c:' + color + '"><span></span></div>',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+    }
 
-    var marker = null;
+    // ----- Estado -----
+    var pointers = [];               // punteros: { id, nombre, color, modo, lat, lng, ts, precision, geocercas: {idGeocerca: true} }
+    var markers = {};                // id de puntero -> marcador de Leaflet
+    var selectedId = null;           // puntero seleccionado
     var followUser = true;
-    var lastPos = null;
-    var lastTs = 0;
+    var lastTs = 0;                  // lectura más reciente de cualquier puntero
     var connected = false;
     var fences = [];
     var fenceLayers = {};
     var fencesKey = '';
-    var currentMode = 'GPS';
-    var insideState = {};   // último estado conocido de cada geocerca (true = dentro) para detectar entradas y salidas
+    var listKey = '';
+    var pListKey = '';
+    var eventsKey = '';
+    var lastWriteAt = 0;             // evita que una lectura vieja pise un cambio recién guardado
+    var lastInteraction = 0;         // última vez que la persona tocó el mapa (arrastre, zoom, clic)
+    var insideState = {};            // "puntero|geocerca" -> último estado conocido (true = dentro)
+    var pendiente = {};              // "puntero|geocerca" -> lecturas nuevas seguidas que contradicen el estado conocido
+    var ultimaLectura = {};          // id de puntero -> timestamp de la última lectura evaluada
+    var centradoInicial = false;
+    var selPosKey = '';
 
     // Variables para dibujo de polígonos
     var isDrawing = false;
@@ -324,6 +424,7 @@
     var tempMarkers = [];
     var tempPolyline = null;
 
+    // ----- Utilidades -----
     function getJSON(path) {
       var ctl = new AbortController();
       var timer = setTimeout(function () { ctl.abort(); }, 6000);
@@ -335,15 +436,21 @@
               .finally(function () { clearTimeout(timer); });
     }
 
-    function putJSON(path, data) {
-      return fetch(DB + path, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      }).then(function (r) { return r.json(); });
+    function send(method, path, body) {
+      var opts = { method: method, cache: 'no-store' };
+      if (body !== undefined) {
+        opts.headers = { 'Content-Type': 'application/json' };
+        opts.body = JSON.stringify(body);
+      }
+      return fetch(DB + path, opts).then(function (r) {
+        if (!r.ok) { throw new Error('HTTP ' + r.status); }
+        return r.json();
+      });
     }
 
-    function num(v) { var n = Number(v); return isFinite(n) ? n : null; }
+    function num(v) { if (v === null || v === undefined || v === '') return null; var n = Number(v); return isFinite(n) ? n : null; }
+    function enc(s) { return encodeURIComponent(s); }
+    function uno(k, v) { var o = {}; o[k] = v; return o; }
 
     function el(tag, cls, text) {
       var e = document.createElement(tag);
@@ -351,6 +458,12 @@
       if (text !== undefined) e.textContent = text;
       return e;
     }
+
+    function limpiarNombre(v, porDefecto) {
+      return String(v === null || v === undefined ? '' : v).trim().slice(0, 60) || porDefecto;
+    }
+
+    function acotar(n, min, max) { return Math.min(Math.max(n, min), max); }
 
     function fmtAgo(ms) {
       var s = Math.max(0, Math.round(ms / 1000));
@@ -366,35 +479,32 @@
       return d.toLocaleString('es-BO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
 
-    function refreshConn() {
-      if (!connected) { $('conn').className = 'pill off'; $('connText').textContent = 'Sin conexión'; return; }
-      if (!lastTs) { $('conn').className = 'pill stale'; $('connText').textContent = 'Esperando datos'; return; }
-      var age = Date.now() - lastTs;
-      $('vAge').textContent = fmtAgo(age);
-      if (age > STALE_MS) { $('conn').className = 'pill stale'; $('connText').textContent = 'Sin señal reciente'; }
-      else { $('conn').className = 'pill live'; $('connText').textContent = 'En vivo'; }
+    // Lee los puntos de un polígono sin importar cómo se guardaron:
+    // {latitude, longitude} (formato actual de la app y de esta página) o [lat, lng] (formato antiguo)
+    function leerPuntos(raw) {
+      var arr = Array.isArray(raw)
+              ? raw
+              : (raw && typeof raw === 'object'
+                      ? Object.keys(raw).sort(function (a, b) { return Number(a) - Number(b); }).map(function (k) { return raw[k]; })
+                      : []);
+      var pts = [];
+      arr.forEach(function (p) {
+        if (!p) return;
+        var la, lo;
+        if (Array.isArray(p)) { la = num(p[0]); lo = num(p[1]); }
+        else {
+          la = num(p.latitude !== undefined ? p.latitude : p.lat);
+          lo = num(p.longitude !== undefined ? p.longitude : p.lng);
+        }
+        if (la !== null && lo !== null) pts.push([la, lo]);
+      });
+      return pts;
     }
 
-    function renderUser(u) {
-      if (!u || typeof u !== 'object') return;
-      var lat = num(u.latitude), lng = num(u.longitude);
-      if (lat === null || lng === null) return;
-
-      lastPos = [lat, lng];
-      lastTs = num(u.timestamp) || 0;
-
-      if (!marker) marker = L.marker(lastPos, { icon: pinIcon }).addTo(map);
-      else marker.setLatLng(lastPos);
-
-      if (followUser) map.panTo(lastPos, { animate: true });
-
-      $('vLat').textContent = lat.toFixed(6);
-      $('vLng').textContent = lng.toFixed(6);
-      currentMode = u.modo || 'GPS';
-      $('vMode').textContent = currentMode === 'manual' ? 'Manual' : 'GPS';
-      $('btnMode').textContent = 'Modo: ' + (currentMode === 'manual' ? 'Manual' : 'GPS');
-
-      updateFenceState();
+    function centroide(pts) {
+      var la = 0, lo = 0;
+      pts.forEach(function (p) { la += p[0]; lo += p[1]; });
+      return [la / pts.length, lo / pts.length];
     }
 
     // Algoritmo Ray-Casting para verificar si está dentro de un polígono irregular
@@ -410,23 +520,115 @@
       return inside;
     }
 
-    function insideOf(f) {
-      if (!lastPos) return false;
-      if (f.puntos && Array.isArray(f.puntos) && f.puntos.length >= 3) {
-        return isPointInPolygon(lastPos, f.puntos);
+    // Un punto que de verdad esté dentro de la geocerca: el centro si es círculo; en una zona libre, su centro
+    // aproximado, y si cae fuera (zona cóncava) el punto interior más cercano a ese centro.
+    function puntoInterior(f) {
+      if (f.tipo !== 'poligono') return [f.lat, f.lng];
+      var c = centroide(f.puntos);
+      if (isPointInPolygon(c, f.puntos)) return c;
+      var minLa = Infinity, maxLa = -Infinity, minLo = Infinity, maxLo = -Infinity;
+      f.puntos.forEach(function (p) {
+        if (p[0] < minLa) minLa = p[0]; if (p[0] > maxLa) maxLa = p[0];
+        if (p[1] < minLo) minLo = p[1]; if (p[1] > maxLo) maxLo = p[1];
+      });
+      var n = 30, mejor = null, mejorD = Infinity;
+      for (var i = 0; i <= n; i++) {
+        for (var j = 0; j <= n; j++) {
+          var la = minLa + (maxLa - minLa) * i / n;
+          var lo = minLo + (maxLo - minLo) * j / n;
+          if (isPointInPolygon([la, lo], f.puntos)) {
+            var d = (la - c[0]) * (la - c[0]) + (lo - c[1]) * (lo - c[1]);
+            if (d < mejorD) { mejorD = d; mejor = [la, lo]; }
+          }
+        }
       }
-      return map.distance(lastPos, [f.lat, f.lng]) <= (f.radio || 50);
+      return mejor || f.puntos[0];
     }
 
-    // Muestra un aviso en pantalla: tipo 'in' (entrada) o 'out' (salida)
-    function notify(tipo, nombre) {
+    // Cuerpos que se guardan en Firebase: el mismo formato que usa la app
+    function cuerpoCirculo(nombre, lat, lng, radio) {
+      return { nombre: nombre, tipo: 'circulo', latitude: lat, longitude: lng, radio: radio };
+    }
+
+    function cuerpoPoligono(nombre, pts) {
+      var c = centroide(pts);
+      return {
+        nombre: nombre,
+        tipo: 'poligono',
+        latitude: c[0],
+        longitude: c[1],
+        radio: 0,
+        puntos: pts.map(function (p) { return { latitude: p[0], longitude: p[1] }; })
+      };
+    }
+
+    // ----- Punteros: lectura y consultas -----
+    function leerPunteros(obj) {
+      var list = [];
+      if (obj && typeof obj === 'object') {
+        Object.keys(obj).forEach(function (id) {
+          var v = obj[id];
+          // Sin "modo" es un resto sin configurar (por ejemplo una posición que llegó tarde): se ignora
+          if (!v || typeof v !== 'object' || typeof v.modo !== 'string') return;
+          var asig = {};
+          if (v.geocercas && typeof v.geocercas === 'object') {
+            Object.keys(v.geocercas).forEach(function (k) { if (v.geocercas[k]) asig[k] = true; });
+          }
+          var color = (typeof v.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(v.color)) ? v.color : PALETA[list.length % PALETA.length];
+          list.push({
+            id: id,
+            nombre: limpiarNombre(v.nombre, 'Puntero'),
+            color: color,
+            modo: v.modo === 'manual' ? 'manual' : 'gps',
+            lat: num(v.latitude),
+            lng: num(v.longitude),
+            ts: num(v.timestamp) || 0,
+            precision: num(v.precision),
+            geocercas: asig
+          });
+        });
+      }
+      list.sort(function (a, b) { return a.nombre.localeCompare(b.nombre, 'es', { numeric: true }) || (a.id < b.id ? -1 : 1); });
+      return list;
+    }
+
+    function pointerById(id) {
+      for (var i = 0; i < pointers.length; i++) { if (pointers[i].id === id) return pointers[i]; }
+      return null;
+    }
+
+    function selectedPointer() { return pointerById(selectedId); }
+
+    function colorNuevo() {
+      for (var i = 0; i < PALETA.length; i++) {
+        var libre = !pointers.some(function (p) { return p.color.toLowerCase() === PALETA[i].toLowerCase(); });
+        if (libre) return PALETA[i];
+      }
+      return PALETA[pointers.length % PALETA.length];
+    }
+
+    function insideOf(p, f) {
+      if (!p || p.lat === null || p.lng === null) return false;
+      var pos = [p.lat, p.lng];
+      if (f.tipo === 'poligono') return isPointInPolygon(pos, f.puntos);
+      return map.distance(pos, [f.lat, f.lng]) <= (f.radio || 50);
+    }
+
+    // Geocercas asignadas a un puntero (relación muchos a muchos: se guarda en el puntero)
+    function asignadas(p) { return fences.filter(function (f) { return p.geocercas[f.id]; }); }
+    function dentroDe(p) { return asignadas(p).filter(function (f) { return insideOf(p, f); }); }
+    function punterosDe(f) { return pointers.filter(function (p) { return p.geocercas[f.id]; }); }
+    function algunoDentro(f) { return pointers.some(function (p) { return p.geocercas[f.id] && insideOf(p, f); }); }
+
+    // ----- Avisos -----
+    function pushToast(cls, icono, titulo, sub, ms) {
       var box = $('toasts');
-      var t = el('div', 'toast ' + tipo);
+      var t = el('div', 'toast ' + cls);
       t.setAttribute('role', 'status');
       var txt = el('div', 'txt');
-      txt.appendChild(el('strong', '', (tipo === 'in' ? 'Entraste a “' : 'Saliste de “') + nombre + '”'));
-      txt.appendChild(el('span', 'when', new Date().toLocaleTimeString('es-BO')));
-      t.appendChild(el('span', 'ico', tipo === 'in' ? '→' : '←'));
+      txt.appendChild(el('strong', '', titulo));
+      if (sub) txt.appendChild(el('span', 'when', sub));
+      t.appendChild(el('span', 'ico', icono));
       t.appendChild(txt);
 
       function close() {
@@ -436,24 +638,296 @@
       t.addEventListener('click', close);
       box.appendChild(t);
       while (box.children.length > 4) box.removeChild(box.firstChild);
-      setTimeout(close, 7000);
+      setTimeout(close, ms || 7000);
     }
 
-    // Compara dónde estás ahora con el estado anterior de cada geocerca y avisa si cambió
-    function checkTransitions() {
-      if (!lastPos) return;
-      var vistos = {};
-      fences.forEach(function (f) {
-        var dentro = insideOf(f);
-        var antes = insideState[f.id];
-        vistos[f.id] = true;
-        // Sin estado previo (primera carga o geocerca nueva): se registra sin avisar
-        if (antes !== undefined && antes !== dentro) notify(dentro ? 'in' : 'out', f.nombre);
-        insideState[f.id] = dentro;
+    // Aviso de entrada o salida de una geocerca: tipo 'in' o 'out'
+    function notify(tipo, nombreGeocerca, nombrePuntero) {
+      pushToast(tipo, tipo === 'in' ? '→' : '←',
+              nombrePuntero + (tipo === 'in' ? ' entró a “' : ' salió de “') + nombreGeocerca + '”',
+              new Date().toLocaleTimeString('es-BO'), 7000);
+    }
+
+    // Mensaje general (reemplaza a alert)
+    function msg(texto, esError) {
+      pushToast(esError ? 'err' : 'ok', esError ? '!' : '✓', texto, '', esError ? 6000 : 4000);
+    }
+
+    // Diálogo reutilizable (reemplaza a prompt y confirm). Devuelve una promesa con los valores o null.
+    // opts.fields: campos de texto/número. opts.checks: casillas { id, label, color, checked } -> data.checks (ids marcados)
+    function openDialog(opts) {
+      return new Promise(function (resolve) {
+        var dlg = $('dlg'), form = $('dlgForm'), body = $('dlgBody');
+        $('dlgTitle').textContent = opts.title;
+        body.replaceChildren();
+        if (opts.message) { body.appendChild(el('p', 'dlg-msg', opts.message)); }
+        var first = null;
+        (opts.fields || []).forEach(function (f) {
+          var wrap = el('label', 'field');
+          wrap.appendChild(el('span', '', f.label));
+          var inp = document.createElement('input');
+          inp.type = f.type || 'text';
+          inp.name = f.id;
+          inp.value = f.value === undefined ? '' : String(f.value);
+          inp.required = true;
+          if (f.type === 'number') { inp.step = 'any'; if (f.min !== undefined) inp.min = f.min; if (f.max !== undefined) inp.max = f.max; }
+          else { inp.maxLength = 60; }
+          wrap.appendChild(inp);
+          body.appendChild(wrap);
+          if (!first) first = inp;
+        });
+        if (opts.checks && opts.checks.length) {
+          var box = el('div', 'checks');
+          if (opts.checksTitle) box.appendChild(el('span', 'checks-title', opts.checksTitle));
+          opts.checks.forEach(function (c) {
+            var lab = el('label', 'chk');
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = c.id;
+            cb.checked = !!c.checked;
+            lab.appendChild(cb);
+            if (c.color) { var d = el('i', 'cdot'); d.style.background = c.color; lab.appendChild(d); }
+            lab.appendChild(el('span', '', c.label));
+            box.appendChild(lab);
+          });
+          body.appendChild(box);
+        }
+        var ok = $('dlgOk');
+        ok.textContent = opts.okText || 'Guardar';
+        ok.classList.toggle('danger', !!opts.danger);
+        ok.classList.toggle('green', !opts.danger);
+
+        function finish(v) {
+          form.onsubmit = null;
+          $('dlgCancel').onclick = null;
+          dlg.oncancel = null;
+          if (dlg.open) dlg.close();
+          resolve(v);
+        }
+        form.onsubmit = function (e) {
+          e.preventDefault();
+          var data = {};
+          (opts.fields || []).forEach(function (f) { data[f.id] = form.elements[f.id].value; });
+          data.checks = Array.prototype.map.call(body.querySelectorAll('.checks input:checked'), function (i) { return i.value; });
+          finish(data);
+        };
+        $('dlgCancel').onclick = function () { finish(null); };
+        dlg.oncancel = function (e) { e.preventDefault(); finish(null); };
+        dlg.showModal();
+        if (first) setTimeout(function () { first.focus(); first.select(); }, 30);
       });
-      Object.keys(insideState).forEach(function (id) { if (!vistos[id]) delete insideState[id]; });
     }
 
+    // ----- Conexión -----
+    function refreshConn() {
+      var sel = selectedPointer();
+      if (sel && sel.ts) { $('vAge').textContent = fmtAgo(Date.now() - sel.ts); } else { $('vAge').textContent = '—'; }
+      if (!connected) { $('conn').className = 'pill off'; $('connText').textContent = 'Sin conexión'; return; }
+      if (!lastTs) { $('conn').className = 'pill stale'; $('connText').textContent = 'Esperando datos'; return; }
+      var age = Date.now() - lastTs;
+      if (age > STALE_MS) { $('conn').className = 'pill stale'; $('connText').textContent = 'Sin señal reciente'; }
+      else { $('conn').className = 'pill live'; $('connText').textContent = 'En vivo'; }
+    }
+
+    // ----- Seguimiento del mapa -----
+    function setFollow(v) {
+      followUser = v;
+      $('btnFollow').textContent = v ? 'Seguir: Activo' : 'Seguir: Pausado';
+      $('btnFollow').classList.toggle('off', !v);
+    }
+
+    // Se anota cada vez que la persona toca el mapa, para no mover la vista mientras lo está usando
+    ['pointerdown', 'wheel', 'touchstart', 'keydown'].forEach(function (ev) {
+      $('map').addEventListener(ev, function () { lastInteraction = Date.now(); }, { passive: true });
+    });
+
+    function usandoElMapa() { return Date.now() - lastInteraction < 1500; }
+
+    // Si la persona arrastra o hace zoom, se deja de seguir (como en cualquier mapa)
+    map.on('dragstart', function () { if (followUser) setFollow(false); });
+    map.on('zoomstart', function () { if (followUser && usandoElMapa()) setFollow(false); });
+
+    function tip(texto) {            // elemento (no HTML): los nombres no se interpretan como HTML
+      var s = document.createElement('span');
+      s.textContent = texto;
+      return s;
+    }
+
+    // ----- Punteros: dibujo en el mapa y paneles -----
+    function renderPointers(obj) {
+      pointers = leerPunteros(obj);
+      aplicarPunteros();
+    }
+
+    function aplicarPunteros() {
+      if (!selectedId || !pointerById(selectedId)) { selectedId = pointers.length ? pointers[0].id : null; selPosKey = ''; }
+
+      var vistos = {};
+      lastTs = 0;
+      pointers.forEach(function (p) {
+        if (p.ts > lastTs) lastTs = p.ts;
+        if (p.lat === null || p.lng === null) return;
+        vistos[p.id] = true;
+        var esSel = p.id === selectedId;
+        var sig = p.color + '|' + esSel;
+        var m = markers[p.id];
+        if (!m) {
+          m = L.marker([p.lat, p.lng], { icon: pinIcon(p.color, esSel), keyboard: false, interactive: false }).addTo(map);
+          m.bindTooltip(tip(p.nombre), { permanent: true, direction: 'top', offset: [0, -12], className: 'fence-label' });
+          m._sig = sig;
+          m._nom = p.nombre;
+          markers[p.id] = m;
+        } else {
+          m.setLatLng([p.lat, p.lng]);
+          if (m._sig !== sig) { m.setIcon(pinIcon(p.color, esSel)); m._sig = sig; }
+          if (m._nom !== p.nombre) { m.setTooltipContent(tip(p.nombre)); m._nom = p.nombre; }
+        }
+      });
+      Object.keys(markers).forEach(function (id) {
+        if (!vistos[id]) { map.removeLayer(markers[id]); delete markers[id]; }
+      });
+
+      // Vista: primera vez se centra en el puntero seleccionado; después lo sigue solo si cambió de lugar
+      var sel = selectedPointer();
+      if (sel && sel.lat !== null && sel.lng !== null) {
+        var k = sel.lat + ',' + sel.lng;
+        if (!centradoInicial) {
+          map.setView([sel.lat, sel.lng], 16, { animate: false });
+          centradoInicial = true;
+          selPosKey = k;
+        } else if (k !== selPosKey) {
+          selPosKey = k;
+          // Sin animación y solo cuando la ubicación cambió de verdad: mover la vista cada 2 s con animación
+          // interrumpía el zoom y desajustaba las capas del mapa.
+          if (followUser && !isDrawing && !usandoElMapa()) map.panTo([sel.lat, sel.lng], { animate: false });
+        }
+      }
+
+      updateFenceState();
+      renderCurrent();
+      renderPointerList();
+      renderFenceManagementList();
+      refreshConn();
+    }
+
+    function renderCurrent() {
+      var p = selectedPointer();
+      if (!p) {
+        ['vPtr', 'vLat', 'vLng', 'vMode', 'vAcc'].forEach(function (id) { $(id).textContent = '—'; });
+        $('btnMode').textContent = 'Modo: —';
+        return;
+      }
+      $('vPtr').textContent = p.nombre;
+      $('vLat').textContent = p.lat === null ? '—' : p.lat.toFixed(6);
+      $('vLng').textContent = p.lng === null ? '—' : p.lng.toFixed(6);
+      $('vMode').textContent = p.modo === 'manual' ? 'Manual' : 'GPS';
+      $('vAcc').textContent = p.precision === null ? '—' : '±' + Math.round(p.precision) + ' m';
+      $('btnMode').textContent = 'Modo: ' + (p.modo === 'manual' ? 'Manual' : 'GPS');
+    }
+
+    // Compara dónde está cada puntero ahora con su estado anterior en cada geocercas ASIGNADA y avisa si cambió.
+    // Para evitar avisos falsos por el rebote del GPS: se ignoran lecturas imprecisas y un cambio solo se
+    // confirma con 2 lecturas nuevas seguidas (el modo manual es inmediato, porque un clic es deliberado).
+    function checkTransitions() {
+      pointers.forEach(function (p) {
+        if (p.lat === null || p.lng === null) return;
+        if (p.precision !== null && p.precision > MAX_PRECISION_M) return;
+        var nueva = p.ts !== ultimaLectura[p.id];
+        var inmediato = p.modo === 'manual';
+        var vistos = {};
+        asignadas(p).forEach(function (f) {
+          var k = p.id + '|' + f.id;
+          var dentro = insideOf(p, f);
+          var antes = insideState[k];
+          vistos[k] = true;
+          if (antes === undefined || antes === dentro) {   // primera vez, o sin cambios
+            insideState[k] = dentro;
+            delete pendiente[k];
+            return;
+          }
+          if (!nueva) return;                               // la misma lectura no cuenta dos veces
+          var n = (pendiente[k] || 0) + 1;
+          if (inmediato || n >= LECTURAS_PARA_CONFIRMAR) {
+            insideState[k] = dentro;
+            delete pendiente[k];
+            notify(dentro ? 'in' : 'out', f.nombre, p.nombre);
+          } else {
+            pendiente[k] = n;
+          }
+        });
+        Object.keys(insideState).forEach(function (k) {
+          if (k.indexOf(p.id + '|') === 0 && !vistos[k]) { delete insideState[k]; delete pendiente[k]; }
+        });
+        ultimaLectura[p.id] = p.ts;
+      });
+      // Limpieza de punteros que ya no existen
+      Object.keys(insideState).forEach(function (k) {
+        var pid = k.split('|')[0];
+        if (!pointerById(pid)) { delete insideState[k]; delete pendiente[k]; }
+      });
+    }
+
+    function boton(texto, cls, fn) {
+      var b = el('button', 'btn mini' + (cls ? ' ' + cls : ''), texto);
+      b.type = 'button';
+      b.addEventListener('click', fn);
+      return b;
+    }
+
+    function renderPointerList() {
+      var ul = $('pointerList');
+      var key = pointers.map(function (p) {
+        return [p.id, p.nombre, p.color, p.modo, p.lat === null ? 0 : 1,
+          Object.keys(p.geocercas).sort().join('+'),
+          dentroDe(p).map(function (f) { return f.id; }).join('+'),
+          p.id === selectedId ? 1 : 0].join(':');
+      }).join(',') + '|' + fencesKey;
+      if (key === pListKey) return;
+      pListKey = key;
+      ul.replaceChildren();
+
+      if (!pointers.length) {
+        ul.appendChild(el('li', 'empty', 'Aún no hay punteros. Crea uno con “+ Nuevo”.'));
+        return;
+      }
+
+      pointers.forEach(function (p) {
+        var li = el('li', p.id === selectedId ? 'sel' : '');
+        li.style.setProperty('--c', p.color);
+        var asig = asignadas(p);
+        var dentro = dentroDe(p);
+
+        var row = el('div', 'list-row');
+        var left = el('div');
+        var nombre = el('span', 'name');
+        var dot = el('i', 'cdot');
+        dot.style.background = p.color;
+        nombre.appendChild(dot);
+        nombre.appendChild(document.createTextNode(p.nombre));
+        left.appendChild(nombre);
+        left.appendChild(el('span', 'meta', (p.modo === 'manual' ? 'Manual' : 'GPS') + ' · ' +
+                (asig.length ? asig.map(function (f) { return f.nombre; }).join(', ') : 'sin geocercas asignadas')));
+        if (dentro.length) {
+          left.appendChild(el('span', 'meta', 'Dentro de: ' + dentro.map(function (f) { return f.nombre; }).join(', ')));
+        }
+        row.appendChild(left);
+        if (p.lat === null) row.appendChild(el('span', 'chip none', 'Sin posición'));
+        else row.appendChild(el('span', 'chip ' + (dentro.length ? 'in' : 'out'), dentro.length ? 'Dentro' : 'Fuera'));
+        li.appendChild(row);
+
+        var actions = el('div', 'list-actions');
+        actions.appendChild(boton('Elegir', '', function () { seleccionar(p); }));
+        actions.appendChild(boton('Editar / geocercas', '', function () { editarPuntero(p); }));
+        actions.appendChild(boton(p.modo === 'manual' ? 'Pasar a GPS' : 'Pasar a manual', 'green', function () {
+          cambiarModo(p, p.modo === 'manual' ? 'gps' : 'manual');
+        }));
+        actions.appendChild(boton('Eliminar', 'danger', function () { eliminarPuntero(p); }));
+        li.appendChild(actions);
+        ul.appendChild(li);
+      });
+    }
+
+    // ----- Geocercas: dibujo y panel -----
     function renderFences(g) {
       var list = [];
       if (g && typeof g === 'object') {
@@ -462,9 +936,10 @@
           if (!v || typeof v !== 'object') return;
           var nombre = String(v.nombre || 'Geocerca').slice(0, 60);
 
-          if (v.puntos && Array.isArray(v.puntos) && v.puntos.length >= 3) {
-            list.push({ id: id, nombre: nombre, puntos: v.puntos, tipo: 'poligono' });
-          } else {
+          var pts = (v.tipo === 'poligono' || v.puntos) ? leerPuntos(v.puntos) : [];
+          if (pts.length >= 3) {
+            list.push({ id: id, nombre: nombre, puntos: pts, tipo: 'poligono' });
+          } else if (v.tipo !== 'poligono') {
             var lat = num(v.latitude), lng = num(v.longitude), r = num(v.radio);
             if (lat !== null && lng !== null && r !== null) {
               list.push({ id: id, nombre: nombre, lat: lat, lng: lng, radio: r, tipo: 'circulo' });
@@ -479,142 +954,350 @@
         Object.keys(fenceLayers).forEach(function (id) { map.removeLayer(fenceLayers[id]); });
         fenceLayers = {};
         fences.forEach(function (f) {
-          var layer;
-          if (f.tipo === 'poligono') {
-            layer = L.polygon(f.puntos, { weight: 2, fillOpacity: .22 }).addTo(map);
-            layer.bindTooltip(f.nombre, { direction: 'top', className: 'fence-label' });
-          } else {
-            layer = L.circle([f.lat, f.lng], { radius: f.radio, weight: 2, fillOpacity: .22 }).addTo(map);
-            layer.bindTooltip(f.nombre + ' · ' + Math.round(f.radio) + ' m', { direction: 'top', className: 'fence-label' });
-          }
+          var layer = f.tipo === 'poligono'
+                  ? L.polygon(f.puntos, { weight: 2, fillOpacity: .22 })
+                  : L.circle([f.lat, f.lng], { radius: f.radio, weight: 2, fillOpacity: .22 });
+          layer.addTo(map);
+          var etiqueta = f.tipo === 'poligono' ? f.nombre : f.nombre + ' · ' + Math.round(f.radio) + ' m';
+          layer.bindTooltip(tip(etiqueta), { direction: 'top', className: 'fence-label', sticky: true });
           fenceLayers[f.id] = layer;
         });
       }
       updateFenceState();
       renderFenceManagementList();
+      renderPointerList();
     }
 
-    // Panel de gestión completo con botones Ir, Mover aquí, Editar y Eliminar restaurados
+    // Panel de gestión: Ir, Punteros, Mover aquí, Editar y Eliminar. Solo se vuelve a dibujar si algo cambió,
+    // así no parpadea cada 2 segundos ni pierde el foco.
     function renderFenceManagementList() {
       var ul = $('fenceList');
+      var asignKey = pointers.map(function (p) { return p.id + ':' + p.nombre + ':' + p.color + ':' + Object.keys(p.geocercas).sort().join('+'); }).join(',');
+      var estados = fences.map(function (f) { return f.id + ':' + (algunoDentro(f) ? 1 : 0); }).join(',');
+      var key = fencesKey + '|' + asignKey + '|' + estados;
+
+      var sel = selectedPointer();
+      if (!fences.length) { $('fenceStatus').textContent = 'Sin geocercas'; }
+      else if (!sel) { $('fenceStatus').textContent = 'Sin punteros'; }
+      else {
+        var dn = dentroDe(sel).map(function (f) { return f.nombre; });
+        $('fenceStatus').textContent = sel.nombre + ': ' + (dn.length ? 'dentro de ' + dn.join(', ') : 'fuera de sus geocercas');
+      }
+
+      if (key === listKey) return;
+      listKey = key;
       ul.replaceChildren();
 
       if (!fences.length) {
         ul.appendChild(el('li', 'empty', 'Aún no hay geocercas creadas'));
-        $('fenceStatus').textContent = 'Sin geocercas';
         return;
       }
 
       fences.forEach(function (f) {
-        var dentro = insideOf(f);
+        var dentro = algunoDentro(f);
         var li = el('li');
 
         var row = el('div', 'list-row');
         var left = el('div');
         left.appendChild(el('span', 'name', f.nombre));
-        left.appendChild(el('span', 'meta', f.tipo === 'poligono' ? 'Tipo: Polígono' : ('Radio: ' + Math.round(f.radio) + ' m')));
+        left.appendChild(el('span', 'meta', f.tipo === 'poligono'
+                ? 'Tipo: Polígono · ' + f.puntos.length + ' puntos'
+                : 'Radio: ' + Math.round(f.radio) + ' m'));
         row.appendChild(left);
         row.appendChild(el('span', 'chip ' + (dentro ? 'in' : 'out'), dentro ? 'Dentro' : 'Fuera'));
         li.appendChild(row);
 
+        // Qué punteros la evalúan
+        var tags = el('div', 'tags');
+        var ps = punterosDe(f);
+        if (!ps.length) tags.appendChild(el('span', 'tag none', 'Sin punteros'));
+        ps.forEach(function (p) {
+          var t = el('span', 'tag', p.nombre);
+          t.style.background = p.color;
+          tags.appendChild(t);
+        });
+        li.appendChild(tags);
+
         var actions = el('div', 'list-actions');
-
-        // Botón Ir
-        var btnGo = el('button', 'btn', 'Ir');
-        btnGo.style.minWidth = 'auto'; btnGo.style.padding = '4px 8px'; btnGo.style.fontSize = '0.7rem';
-        btnGo.onclick = function() {
-          var layer = fenceLayers[f.id];
-          if (layer) {
-            if (f.tipo === 'poligono') {
-              map.setView(layer.getBounds().getCenter(), 16, { animate: true });
-            } else {
-              map.setView([f.lat, f.lng], 16, { animate: true });
-            }
-          }
-        };
-
-        // Botón Mover aquí (solo para círculos o referencia de centro)
-        var btnMove = el('button', 'btn green', 'Mover aquí');
-        btnMove.style.minWidth = 'auto'; btnMove.style.padding = '4px 8px'; btnMove.style.fontSize = '0.7rem';
-        btnMove.onclick = function() {
-          if (!lastPos) { alert('No hay ubicación actual.'); return; }
-          if (f.tipo === 'circulo') {
-            fetch(DB + '/geocercas/' + f.id + '.json', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ latitude: lastPos[0], longitude: lastPos[1] })
-            }).then(function() { alert('Geocerca movida a tu ubicación.'); });
-          } else {
-            alert('Los polígonos personalizados se redibujan usando el botón "Dibujar zona".');
-          }
-        };
-
-        // Botón Editar nombre / radio
-        var btnEdit = el('button', 'btn', 'Editar');
-        btnEdit.style.minWidth = 'auto'; btnEdit.style.padding = '4px 8px'; btnEdit.style.fontSize = '0.7rem';
-        btnEdit.onclick = function() {
-          var nom = prompt('Nuevo nombre:', f.nombre);
-          if (nom === null) return;
-
-          if (f.tipo === 'circulo') {
-            var rad = Number(prompt('Nuevo radio en metros:', f.radio));
-            if (isNaN(rad) || rad <= 0) return;
-            fetch(DB + '/geocercas/' + f.id + '.json', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ nombre: nom, radio: rad })
-            }).then(function() { alert('Geocerca actualizada.'); });
-          } else {
-            fetch(DB + '/geocercas/' + f.id + '.json', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ nombre: nom })
-            }).then(function() { alert('Nombre actualizado.'); });
-          }
-        };
-
-        // Botón Eliminar
-        var btnDel = el('button', 'btn danger', 'Eliminar');
-        btnDel.style.minWidth = 'auto'; btnDel.style.padding = '4px 8px'; btnDel.style.fontSize = '0.7rem';
-        btnDel.onclick = function() {
-          if (confirm('¿Eliminar "' + f.nombre + '"?')) {
-            fetch(DB + '/geocercas/' + f.id + '.json', { method: 'DELETE' })
-                    .then(function() { alert('Geocerca eliminada.'); });
-          }
-        };
-
-        actions.appendChild(btnGo);
-        actions.appendChild(btnMove);
-        actions.appendChild(btnEdit);
-        actions.appendChild(btnDel);
+        actions.appendChild(boton('Ir', '', function () { irA(f); }));
+        actions.appendChild(boton('Punteros', '', function () { asignarPunteros(f); }));
+        actions.appendChild(boton('Mover aquí', 'green', function () { moverAqui(f); }));
+        actions.appendChild(boton('Editar', '', function () { editar(f); }));
+        actions.appendChild(boton('Eliminar', 'danger', function () { eliminar(f); }));
         li.appendChild(actions);
-
         ul.appendChild(li);
       });
-
-      var insideNames = fences.filter(function(f){ return insideOf(f); }).map(function(f){ return f.nombre; });
-      if (insideNames.length) {
-        $('fenceStatus').textContent = 'Dentro de: ' + insideNames.join(', ');
-      } else {
-        $('fenceStatus').textContent = 'Fuera de todas las geocercas';
-      }
     }
 
     function updateFenceState() {
       checkTransitions();
       fences.forEach(function (f) {
-        var dentro = insideOf(f);
+        var dentro = algunoDentro(f);              // verde si cualquier puntero asignado está dentro
         var layer = fenceLayers[f.id];
-        if (layer) {
+        if (layer && layer._estado !== dentro) {   // solo se repinta si cambió el estado
+          layer._estado = dentro;
           var color = dentro ? COLOR_IN : COLOR_OUT;
           layer.setStyle({ color: color, fillColor: color });
         }
       });
     }
 
+    // ----- Guardado -----
+    function recargar() {
+      return Promise.all([getJSON('/punteros.json'), getJSON('/geocercas.json')]).then(function (res) {
+        renderFences(res[1]);
+        renderPointers(res[0]);
+      });
+    }
+
+    function guardar(promesa, textoOk) {
+      return promesa.then(function () {
+        lastWriteAt = Date.now();
+        if (textoOk) msg(textoOk);
+        return recargar();
+      }).catch(function () {
+        msg('No se pudo guardar. Revisa tu conexión y las reglas de Firebase.', true);
+      });
+    }
+
+    // ----- Acciones sobre los punteros -----
+    function seleccionar(p) {
+      selectedId = p.id;
+      selPosKey = '';
+      setFollow(true);
+      if (p.lat !== null && p.lng !== null) map.panTo([p.lat, p.lng], { animate: false });
+      aplicarPunteros();
+    }
+
+    // Mueve un puntero a una posición. Un puntero en GPS pasa a modo manual (el GPS real no se puede mover).
+    function colocarPuntero(p, lat, lng) {
+      var eraGps = p.modo !== 'manual';
+      var path = '/punteros/' + enc(p.id) + '.json';
+      lastWriteAt = Date.now();
+      // Respuesta inmediata en pantalla; después llega la lectura confirmada del servidor
+      p.modo = 'manual'; p.lat = lat; p.lng = lng; p.ts = Date.now(); p.precision = null;
+      aplicarPunteros();
+      return send('PATCH', path, {
+        modo: 'manual',
+        latitude: lat,
+        longitude: lng,
+        timestamp: { '.sv': 'timestamp' },   // hora del servidor
+        precision: null                      // borra la precisión del GPS anterior
+      }).then(function () {
+        lastWriteAt = Date.now();
+        if (eraGps) {
+          // Si la app justo estaba mandando una lectura GPS, pudo pisar esta posición: se vuelve a enviar una vez
+          setTimeout(function () {
+            var q = pointerById(p.id);
+            if (!q || q.lat !== lat || q.lng !== lng) return;
+            lastWriteAt = Date.now();
+            send('PATCH', path, { latitude: lat, longitude: lng, timestamp: { '.sv': 'timestamp' } }).catch(function () {});
+          }, 1600);
+        }
+      }).catch(function () { msg('No se pudo mover el puntero.', true); });
+    }
+
+    // Solo un puntero puede usar el GPS (el teléfono tiene un único GPS)
+    function cambiarModo(p, nuevo) {
+      if (p.modo === nuevo) return;
+      var ops = [];
+      var otros = [];
+      p.modo = nuevo;
+      ops.push(send('PATCH', '/punteros/' + enc(p.id) + '.json', { modo: nuevo }));
+      if (nuevo === 'gps') {
+        pointers.forEach(function (o) {
+          if (o !== p && o.modo !== 'manual') {
+            o.modo = 'manual';
+            otros.push(o.nombre);
+            ops.push(send('PATCH', '/punteros/' + enc(o.id) + '.json', { modo: 'manual' }));
+          }
+        });
+      }
+      lastWriteAt = Date.now();
+      aplicarPunteros();
+      Promise.all(ops).then(function () {
+        lastWriteAt = Date.now();
+        if (nuevo === 'manual') {
+          msg('Modo manual: haz clic en el mapa para mover a ' + p.nombre + '.');
+        } else if (otros.length) {
+          msg(p.nombre + ' vuelve al GPS. ' + otros.join(', ') + ' pasa a manual (hay un solo GPS).');
+        } else {
+          msg(p.nombre + ' vuelve a usar el GPS de la app.');
+        }
+      }).catch(function () { msg('No se pudo cambiar el modo.', true); });
+    }
+
+    function checksGeocercas(p) {
+      return fences.map(function (f) { return { id: f.id, label: f.nombre, checked: !!(p && p.geocercas[f.id]) }; });
+    }
+
+    function mapaAsignado(ids) {
+      if (!ids.length) return null;           // null borra el campo en Firebase
+      var o = {};
+      ids.forEach(function (id) { o[id] = true; });
+      return o;
+    }
+
+    function crearPuntero() {
+      var c = map.getCenter();
+      openDialog({
+        title: 'Nuevo puntero',
+        message: 'Aparecerá en el centro del mapa, en modo manual.',
+        fields: [{ id: 'nombre', label: 'Nombre', type: 'text', value: 'Puntero ' + (pointers.length + 1) }],
+        checks: checksGeocercas(null),
+        checksTitle: 'Geocercas que evalúa este puntero'
+      }).then(function (r) {
+        if (!r) return;
+        var body = {
+          nombre: limpiarNombre(r.nombre, 'Puntero ' + (pointers.length + 1)),
+          color: colorNuevo(),
+          modo: 'manual',
+          latitude: c.lat,
+          longitude: c.lng,
+          timestamp: { '.sv': 'timestamp' }
+        };
+        var asig = mapaAsignado(r.checks);
+        if (asig) body.geocercas = asig;
+        guardar(send('POST', '/punteros.json', body).then(function (res) {
+          selectedId = res.name;
+          selPosKey = '';
+          return res;
+        }), 'Puntero creado.');
+      });
+    }
+
+    function editarPuntero(p) {
+      openDialog({
+        title: 'Editar puntero',
+        fields: [{ id: 'nombre', label: 'Nombre', type: 'text', value: p.nombre }],
+        checks: checksGeocercas(p),
+        checksTitle: 'Geocercas que evalúa este puntero'
+      }).then(function (r) {
+        if (!r) return;
+        guardar(send('PATCH', '/punteros/' + enc(p.id) + '.json', {
+          nombre: limpiarNombre(r.nombre, p.nombre),
+          geocercas: mapaAsignado(r.checks)
+        }), 'Cambios guardados.');
+      });
+    }
+
+    function eliminarPuntero(p) {
+      if (pointers.length <= 1) { msg('Debe existir al menos un puntero.', true); return; }
+      openDialog({
+        title: 'Eliminar puntero',
+        message: '¿Eliminar “' + p.nombre + '”? Las geocercas no se borran.',
+        okText: 'Eliminar',
+        danger: true
+      }).then(function (r) {
+        if (r) guardar(send('DELETE', '/punteros/' + enc(p.id) + '.json'), 'Puntero eliminado.');
+      });
+    }
+
+    // ----- Acciones sobre las geocercas -----
+    // "Ir": además de la vista, el puntero también va a la geocerca
+    function punteroParaIr(f) {
+      var sel = selectedPointer();
+      if (sel && sel.geocercas[f.id]) return sel;
+      var ps = punterosDe(f);
+      return ps.length ? ps[0] : sel;
+    }
+
+    function irA(f) {
+      setFollow(false);                               // si no, el seguimiento devolvería la vista al puntero
+      var layer = fenceLayers[f.id];
+      if (layer) map.fitBounds(layer.getBounds(), { padding: [40, 40], maxZoom: 18 });
+      var p = punteroParaIr(f);
+      if (!p) return;
+      selectedId = p.id;
+      var d = puntoInterior(f);
+      var eraGps = p.modo !== 'manual';
+      colocarPuntero(p, d[0], d[1]).then(function () {
+        msg(p.nombre + ' fue a “' + f.nombre + '”' +
+                (eraGps ? ' y pasó a modo manual' : '') +
+                (p.geocercas[f.id] ? '.' : ' (no la tiene asignada).'));
+      });
+    }
+
+    function moverAqui(f) {
+      var p = selectedPointer();
+      if (!p || p.lat === null) { msg('No hay un puntero con ubicación todavía.', true); return; }
+      var path = '/geocercas/' + enc(f.id) + '.json';
+      if (f.tipo === 'circulo') {
+        guardar(send('PATCH', path, { tipo: 'circulo', latitude: p.lat, longitude: p.lng }), 'Geocerca movida al puntero.');
+      } else {
+        // El polígono conserva su forma: se desplaza para que su centro quede en el puntero
+        var c = centroide(f.puntos);
+        var dLat = p.lat - c[0], dLng = p.lng - c[1];
+        var movidos = f.puntos.map(function (q) { return [q[0] + dLat, q[1] + dLng]; });
+        guardar(send('PATCH', path, cuerpoPoligono(f.nombre, movidos)), 'Zona movida al puntero.');
+      }
+    }
+
+    function editar(f) {
+      var campos = [{ id: 'nombre', label: 'Nombre', type: 'text', value: f.nombre }];
+      if (f.tipo === 'circulo') {
+        campos.push({ id: 'radio', label: 'Radio en metros', type: 'number', value: Math.round(f.radio), min: 10, max: 100000 });
+      }
+      openDialog({ title: f.tipo === 'circulo' ? 'Editar círculo' : 'Renombrar zona', fields: campos }).then(function (r) {
+        if (!r) return;
+        var body = { nombre: limpiarNombre(r.nombre, f.nombre) };
+        if (f.tipo === 'circulo') body.radio = acotar(num(r.radio) || f.radio, 10, 100000);
+        guardar(send('PATCH', '/geocercas/' + enc(f.id) + '.json', body), 'Cambios guardados.');
+      });
+    }
+
+    // Elegir qué punteros evalúan una geocerca
+    function asignarPunteros(f) {
+      if (!pointers.length) { msg('Primero crea un puntero.', true); return; }
+      openDialog({
+        title: 'Punteros de “' + f.nombre + '”',
+        message: 'Elige qué punteros evalúan esta geocerca.',
+        checks: pointers.map(function (p) { return { id: p.id, label: p.nombre, color: p.color, checked: !!p.geocercas[f.id] }; })
+      }).then(function (r) {
+        if (!r) return;
+        var ops = [];
+        pointers.forEach(function (p) {
+          var quiere = r.checks.indexOf(p.id) !== -1, tiene = !!p.geocercas[f.id];
+          if (quiere !== tiene) {
+            ops.push(send('PATCH', '/punteros/' + enc(p.id) + '/geocercas.json', uno(f.id, quiere ? true : null)));
+          }
+        });
+        if (!ops.length) return;
+        guardar(Promise.all(ops), 'Asignación guardada.');
+      });
+    }
+
+    function eliminar(f) {
+      openDialog({
+        title: 'Eliminar geocerca',
+        message: '¿Eliminar “' + f.nombre + '”? También desaparecerá de la app.',
+        okText: 'Eliminar',
+        danger: true
+      }).then(function (r) {
+        if (!r) return;
+        var quitar = punterosDe(f).map(function (p) {
+          return send('DELETE', '/punteros/' + enc(p.id) + '/geocercas/' + enc(f.id) + '.json');
+        });
+        guardar(send('DELETE', '/geocercas/' + enc(f.id) + '.json').then(function () { return Promise.all(quitar); }), 'Geocerca eliminada.');
+      });
+    }
+
+    // Crea una geocerca y la asigna a los punteros elegidos
+    function crearGeocerca(body, ids, textoOk) {
+      return guardar(send('POST', '/geocercas.json', body).then(function (res) {
+        var fid = res.name;
+        return Promise.all((ids || []).map(function (pid) {
+          return send('PATCH', '/punteros/' + enc(pid) + '/geocercas.json', uno(fid, true));
+        }));
+      }), textoOk);
+    }
+
+    function checksPunterosNuevos() {
+      return pointers.map(function (p) { return { id: p.id, label: p.nombre, color: p.color, checked: p.id === selectedId }; });
+    }
+
+    // ----- Eventos -----
     function renderEvents(obj) {
-      var ul = $('eventList');
-      ul.replaceChildren();
       var items = [];
       if (obj && typeof obj === 'object') {
         Object.keys(obj).forEach(function (k) {
@@ -623,6 +1306,12 @@
       }
       items.sort(function (a, b) { return a.k < b.k ? 1 : -1; });
 
+      var key = items.map(function (it) { return it.k; }).join(',');
+      if (key === eventsKey) return;     // sin eventos nuevos: no se redibuja
+      eventsKey = key;
+
+      var ul = $('eventList');
+      ul.replaceChildren();
       if (!items.length) {
         ul.appendChild(el('li', 'empty', 'Sin eventos todavía'));
         return;
@@ -633,7 +1322,8 @@
         var row = el('div', 'list-row');
         var left = el('div');
         left.appendChild(el('span', 'name', String(it.v.geocerca || 'Geocerca').slice(0, 60)));
-        left.appendChild(el('span', 'meta', fmtDate(num(it.v.timestamp))));
+        var quien = it.v.puntero ? String(it.v.puntero).slice(0, 60) + ' · ' : '';
+        left.appendChild(el('span', 'meta', quien + fmtDate(num(it.v.timestamp))));
         row.appendChild(left);
         row.appendChild(el('span', 'chip ' + (entrada ? 'in' : 'out'), entrada ? 'Entrada' : 'Salida'));
         li.appendChild(row);
@@ -641,19 +1331,24 @@
       });
     }
 
+    // ----- Bucles de actualización -----
     function tick() {
-      Promise.all([getJSON('/usuario_activo.json'), getJSON('/geocercas.json')])
+      var startedAt = Date.now();
+      Promise.all([getJSON('/punteros.json'), getJSON('/geocercas.json')])
               .then(function (res) {
                 connected = true;
-                renderUser(res[0]);
-                renderFences(res[1]);
+                // Si se guardó algo mientras esta lectura estaba en camino, se ignora: la próxima será más nueva
+                if (startedAt >= lastWriteAt) {
+                  renderFences(res[1]);      // primero las geocercas, para que los punteros se evalúen con las actuales
+                  renderPointers(res[0]);
+                }
               })
               .catch(function () { connected = false; })
               .finally(function () { refreshConn(); setTimeout(tick, POLL_MS); });
     }
 
     function tickEvents() {
-      getJSON('/eventos.json?orderBy="%24key"&limitToLast=8')
+      getJSON('/eventos.json?orderBy=%22%24key%22&limitToLast=8')
               .then(renderEvents)
               .catch(function () {})
               .finally(function () { setTimeout(tickEvents, EVENTS_MS); });
@@ -661,134 +1356,131 @@
 
     // --- Controles de Botones ---
     $('btnFollow').onclick = function () {
-      followUser = !followUser;
-      this.textContent = followUser ? 'Seguir: Activo' : 'Seguir: Pausado';
-      this.classList.toggle('off', !followUser);
+      setFollow(!followUser);
+      var p = selectedPointer();
+      if (followUser && p && p.lat !== null) map.panTo([p.lat, p.lng], { animate: false });
     };
 
     $('btnCenter').onclick = function () {
-      followUser = true;
-      $('btnFollow').textContent = 'Seguir: Activo';
-      $('btnFollow').classList.remove('off');
-      if (lastPos) map.setView(lastPos, 16, { animate: true });
+      setFollow(true);
+      var p = selectedPointer();
+      if (p && p.lat !== null) map.setView([p.lat, p.lng], 16, { animate: false });
     };
 
     $('btnMode').onclick = function () {
-      var nuevoModo = (currentMode === 'manual') ? 'GPS' : 'manual';
-      putJSON('/usuario_activo.json', { modo: nuevoModo }).then(function () {
-        currentMode = nuevoModo;
-        $('vMode').textContent = currentMode === 'manual' ? 'Manual' : 'GPS';
-        $('btnMode').textContent = 'Modo: ' + (currentMode === 'manual' ? 'Manual' : 'GPS');
-        if (nuevoModo === 'manual') {
-          alert('Modo manual activo: haz clic en cualquier parte del mapa para mover tu ubicación.');
-        }
-      });
+      var p = selectedPointer();
+      if (!p) { msg('Primero crea un puntero.', true); return; }
+      cambiarModo(p, p.modo === 'manual' ? 'gps' : 'manual');
     };
 
-    $('btnCircle').onclick = function () {
-      var center = map.getCenter();
-      var nom = prompt('Nombre de la geocerca circular:', 'Geocerca Web');
-      if (!nom) return;
-      var rad = Number(prompt('Radio en metros:', '100')) || 50;
+    $('btnPointer').onclick = crearPuntero;
+    $('btnPointer2').onclick = crearPuntero;
 
-      fetch(DB + '/geocercas.json', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: nom, latitude: center.lat, longitude: center.lng, radio: rad })
-      }).then(function() { alert('Geocerca circular creada.'); });
+    $('btnCircle').onclick = function () {
+      var p = selectedPointer();
+      var c = (p && p.lat !== null) ? { lat: p.lat, lng: p.lng } : map.getCenter();
+      openDialog({
+        title: 'Nuevo círculo',
+        message: (p && p.lat !== null) ? 'Se creará en la ubicación de ' + p.nombre + '.' : 'Se creará en el centro del mapa.',
+        fields: [
+          { id: 'nombre', label: 'Nombre', type: 'text', value: 'Geocerca Web' },
+          { id: 'radio', label: 'Radio en metros', type: 'number', value: 100, min: 10, max: 100000 }
+        ],
+        checks: checksPunterosNuevos(),
+        checksTitle: 'Punteros que la evalúan'
+      }).then(function (r) {
+        if (!r) return;
+        var nom = limpiarNombre(r.nombre, 'Geocerca Web');
+        var rad = acotar(num(r.radio) || 100, 10, 100000);
+        crearGeocerca(cuerpoCirculo(nom, c.lat, c.lng, rad), r.checks, 'Geocerca circular creada.');
+      });
     };
 
     // --- Dibujo de Polígonos por Puntos ---
     $('btnDraw').onclick = function () {
+      cleanupDrawing();
       isDrawing = true;
-      drawPoints = [];
-      tempMarkers = [];
+      map.doubleClickZoom.disable();     // un doble clic no debe añadir dos puntos y hacer zoom a la vez
       $('drawPanel').classList.add('active');
       $('drawInfo').textContent = 'Puntos: 0 (mínimo 3)';
       $('btnFinish').disabled = true;
-      alert('Modo dibujo por puntos activado: haz clic en el mapa para agregar vértices.');
+      msg('Dibujo activado: haz clic en el mapa para marcar los vértices de la zona.');
     };
 
-    map.on('click', function (e) {
-      if (currentMode === 'manual' && !isDrawing) {
-        putJSON('/usuario_activo.json', {
-          latitude: e.latlng.lat,
-          longitude: e.latlng.lng,
-          timestamp: Date.now(),
-          modo: 'manual'
-        });
-        return;
+    function actualizarDibujo() {
+      if (tempPolyline) { map.removeLayer(tempPolyline); tempPolyline = null; }
+      if (drawPoints.length > 1) {
+        tempPolyline = L.polyline(drawPoints, { color: '#e5484d', weight: 3, interactive: false }).addTo(map);
       }
+      $('drawInfo').textContent = 'Puntos: ' + drawPoints.length + ' (mínimo 3)';
+      $('btnFinish').disabled = drawPoints.length < 3;
+    }
 
+    // En modo manual, el clic mueve el puntero seleccionado. Se espera un instante para no confundirlo con un
+    // doble clic (que sirve para hacer zoom): antes, hacer zoom con doble clic enviaba dos ubicaciones y el punto "saltaba".
+    var clickTimer = null;
+    map.on('click', function (e) {
       if (isDrawing) {
         drawPoints.push([e.latlng.lat, e.latlng.lng]);
-        var m = L.circleMarker(e.latlng, { radius: 6, color: '#e5484d', fillColor: '#ff8080', fillOpacity: 1 }).addTo(map);
-        tempMarkers.push(m);
-
-        if (tempPolyline) map.removeLayer(tempPolyline);
-        if (drawPoints.length > 1) {
-          tempPolyline = L.polyline(drawPoints, { color: '#e5484d', weight: 3 }).addTo(map);
-        }
-
-        $('drawInfo').textContent = 'Puntos: ' + drawPoints.length + ' (mínimo 3)';
-        if (drawPoints.length >= 3) { $('btnFinish').removeAttribute('disabled'); }
+        tempMarkers.push(L.circleMarker(e.latlng, { radius: 6, color: '#e5484d', fillColor: '#ff8080', fillOpacity: 1, interactive: false }).addTo(map));
+        actualizarDibujo();
+        return;
+      }
+      var p = selectedPointer();
+      if (p && p.modo === 'manual') {
+        var ll = e.latlng;
+        var id = p.id;
+        clearTimeout(clickTimer);
+        clickTimer = setTimeout(function () {
+          var q = pointerById(id);
+          if (q && q.modo === 'manual') colocarPuntero(q, ll.lat, ll.lng);
+        }, 280);
       }
     });
+    map.on('dblclick', function () { clearTimeout(clickTimer); });
 
     $('btnUndo').onclick = function () {
-      if (drawPoints.length > 0) {
-        drawPoints.pop();
-        var m = tempMarkers.pop();
-        if (m) map.removeLayer(m);
-        if (tempPolyline) map.removeLayer(tempPolyline);
-        if (drawPoints.length > 1) {
-          tempPolyline = L.polyline(drawPoints, { color: '#e5484d', weight: 3 }).addTo(map);
-        }
-        $('drawInfo').textContent = 'Puntos: ' + drawPoints.length + ' (mínimo 3)';
-        if (drawPoints.length < 3) { $('btnFinish').setAttribute('disabled', 'true'); }
-      }
+      if (!drawPoints.length) return;
+      drawPoints.pop();
+      var m = tempMarkers.pop();
+      if (m) map.removeLayer(m);
+      actualizarDibujo();
     };
 
-    $('btnCancel').onclick = function () {
-      cleanupDrawing();
-    };
+    $('btnCancel').onclick = function () { cleanupDrawing(); };
 
     $('btnFinish').onclick = function () {
       if (drawPoints.length < 3) return;
-      var nom = prompt('Nombre de la zona poligonal:', 'Zona Polígono Web');
-      if (!nom) return;
-
-      fetch(DB + '/geocercas.json', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nombre: nom,
-          puntos: drawPoints
-        })
-      }).then(function() {
-        alert('¡Polígono guardado con éxito!');
-        cleanupDrawing();
+      var pts = drawPoints.slice();
+      openDialog({
+        title: 'Nueva zona',
+        fields: [{ id: 'nombre', label: 'Nombre', type: 'text', value: 'Zona Polígono Web' }],
+        checks: checksPunterosNuevos(),
+        checksTitle: 'Punteros que la evalúan'
+      }).then(function (r) {
+        if (!r) return;                       // se queda dibujando para poder corregir
+        crearGeocerca(cuerpoPoligono(limpiarNombre(r.nombre, 'Zona Polígono Web'), pts), r.checks, 'Zona guardada con éxito.')
+                .then(cleanupDrawing);
       });
     };
 
     function cleanupDrawing() {
       isDrawing = false;
+      map.doubleClickZoom.enable();
       $('drawPanel').classList.remove('active');
-      tempMarkers.forEach(function(m){ map.removeLayer(m); });
+      tempMarkers.forEach(function (m) { map.removeLayer(m); });
       tempMarkers = [];
       if (tempPolyline) { map.removeLayer(tempPolyline); tempPolyline = null; }
       drawPoints = [];
     }
 
-    map.on('dragstart', function () {
-      if (followUser) {
-        followUser = false;
-        $('btnFollow').textContent = 'Seguir: Pausado';
-        $('btnFollow').classList.add('off');
-      }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && isDrawing && !$('dlg').open) cleanupDrawing();
     });
 
     setInterval(refreshConn, 1000);
+    renderEvents(null);
+    renderPointerList();
     tick();
     tickEvents();
   })();

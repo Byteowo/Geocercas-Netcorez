@@ -15,8 +15,10 @@ import android.text.InputType
 import android.util.Log
 import android.view.View
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -82,6 +84,24 @@ data class Geocerca(
     val esPoligono: Boolean get() = tipo == "poligono"
 }
 
+/**
+ * Un puntero. Todos los punteros tienen la misma configuración (nombre, color, modo GPS/manual)
+ * y cada uno tiene su propio conjunto de geocercas asignadas: relación muchos a muchos
+ * (un puntero puede tener varias geocercas y una geocerca puede estar en varios punteros).
+ */
+data class Puntero(
+    val id: String,
+    var nombre: String,
+    var color: String,
+    var modo: String, // "gps" | "manual"
+    var lat: Double,
+    var lng: Double,
+    var tienePos: Boolean,
+    val geocercas: MutableSet<String> // ids de las geocercas asignadas
+) {
+    val esManual: Boolean get() = modo == "manual"
+}
+
 class MainActivity : AppCompatActivity() {
 
     // Vistas
@@ -89,6 +109,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var latitudeTextView: TextView
     private lateinit var longitudeTextView: TextView
     private lateinit var geofenceStatusTextView: TextView
+    private lateinit var pointersStatusTextView: TextView
     private lateinit var modeTextView: TextView
     private lateinit var drawHintTextView: TextView
     private lateinit var drawPanel: View
@@ -98,7 +119,9 @@ class MainActivity : AppCompatActivity() {
     // Firebase (null si no se pudo inicializar: la app sigue funcionando sin subir datos)
     private var database: DatabaseReference? = null
     private var geocercasListener: ValueEventListener? = null
+    private var punterosListener: ValueEventListener? = null
     private var primeraSincronizacion = true
+    private var primeraSincPunteros = true
 
     private val locationPermissionRequestCode = 1
     private val locationUpdateInterval = 1000L
@@ -110,17 +133,25 @@ class MainActivity : AppCompatActivity() {
     private var mapLoading = false
     private var gpsDialog: AlertDialog? = null
 
-    // Modo de ubicación: GPS real o manual (tocando el mapa)
-    private var manualMode = false
-    private var currentPoint: Point? = null
+    // Última ubicación real del teléfono (la usan los punteros en modo GPS)
+    private var ultimaGps: Point? = null
+
+    // Punteros
+    private val paleta = listOf(
+        "#E53935", "#8E24AA", "#FB8C00", "#6D4C41", "#D81B60", "#F9A825", "#546E7A", "#AD1457"
+    )
+    private val punteros = mutableListOf<Puntero>()
+    private var seleccionadoId: String? = null
+    private var pointerCircleManager: CircleAnnotationManager? = null
+    private var pointerLabelManager: PointAnnotationManager? = null
 
     // Geocercas
     private val geocercas = mutableListOf<Geocerca>()
-    private val dentroDe = mutableSetOf<String>() // ids de las geocercas donde estoy dentro
+    // id de puntero -> ids de las geocercas donde ese puntero está dentro
+    private val dentroDe = mutableMapOf<String, MutableSet<String>>()
     private var polygonManager: PolygonAnnotationManager? = null
     private var fenceLineManager: PolylineAnnotationManager? = null
     private var labelManager: PointAnnotationManager? = null
-    private var circleManager: CircleAnnotationManager? = null // marcador del modo manual
 
     // Dibujo de zonas
     private var drawing = false
@@ -141,6 +172,7 @@ class MainActivity : AppCompatActivity() {
         latitudeTextView = findViewById(R.id.latitudeTextView)
         longitudeTextView = findViewById(R.id.longitudeTextView)
         geofenceStatusTextView = findViewById(R.id.geofenceStatusTextView)
+        pointersStatusTextView = findViewById(R.id.pointersStatusTextView)
         btnMode = findViewById(R.id.btnMode)
         modeTextView = findViewById(R.id.modeTextView)
         drawHintTextView = findViewById(R.id.drawHintTextView)
@@ -174,8 +206,10 @@ class MainActivity : AppCompatActivity() {
 
         initializeFirebase()
         cargarGeocercas()
-        actualizarEstadoGeocercas()
+        cargarPunteros()
+        actualizarUI()
         escucharGeocercas()
+        escucharPunteros()
         initializeLocationListener()
         setupButtons()
         setupMapGestures()
@@ -185,8 +219,10 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         // Cubre el primer arranque y el regreso desde Configuración (GPS activado manualmente)
-        if (hasLocationPermission() && !manualMode) {
+        if (hasLocationPermission()) {
             checkGpsStatus()
+        } else if (!hayPunteroGps()) {
+            initializeMap()
         }
     }
 
@@ -203,6 +239,11 @@ class MainActivity : AppCompatActivity() {
             database?.child("geocercas")?.removeEventListener(l)
         }
         geocercasListener = null
+        val pl = punterosListener
+        if (pl != null) {
+            database?.child("punteros")?.removeEventListener(pl)
+        }
+        punterosListener = null
         locationListener = null
         gpsDialog?.dismiss()
         gpsDialog = null
@@ -225,18 +266,61 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun enviarUbicacion(lat: Double, lng: Double) {
-        val dentroNombres = geocercas
-            .filter { dentroDe.contains(it.id) }
+    private fun nombresDentro(p: Puntero): String {
+        val set = dentroDe[p.id]
+        return geocercas
+            .filter { set?.contains(it.id) == true }
             .joinToString(", ") { it.nombre }
+    }
+
+    /** Envía solo la posición de un puntero (no pisa nombre, modo ni geocercas asignadas). */
+    private fun enviarUbicacion(p: Puntero) {
         val data = mapOf(
-            "latitude" to lat,
-            "longitude" to lng,
-            "modo" to (if (manualMode) "manual" else "gps"),
-            "geocerca" to dentroNombres,
+            "latitude" to p.lat,
+            "longitude" to p.lng,
+            "geocerca" to nombresDentro(p),
             "timestamp" to System.currentTimeMillis()
         )
-        database?.child("usuario_activo")?.setValue(data)
+        database?.child("punteros")?.child(p.id)?.updateChildren(data)
+    }
+
+    private fun actualizarGeocercaRemota(p: Puntero) {
+        database?.child("punteros")?.child(p.id)
+            ?.updateChildren(mapOf("geocerca" to nombresDentro(p)))
+    }
+
+    /** Sube la configuración completa de un puntero (nombre, color, modo, posición, geocercas). */
+    private fun subirPuntero(p: Puntero) {
+        val ref = database?.child("punteros")?.child(p.id) ?: return
+        val m = HashMap<String, Any?>()
+        m["nombre"] = p.nombre
+        m["color"] = p.color
+        m["modo"] = p.modo
+        if (p.tienePos) {
+            m["latitude"] = p.lat
+            m["longitude"] = p.lng
+            m["timestamp"] = System.currentTimeMillis()
+        }
+        val gm = HashMap<String, Any>()
+        for (id in p.geocercas) gm[id] = true
+        m["geocercas"] = if (gm.isEmpty()) null else gm
+        ref.updateChildren(m)
+    }
+
+    /** Sube solo la lista de geocercas asignadas a un puntero. */
+    private fun subirAsignaciones(p: Puntero) {
+        val ref = database?.child("punteros")?.child(p.id)?.child("geocercas") ?: return
+        if (p.geocercas.isEmpty()) {
+            ref.removeValue()
+        } else {
+            val gm = HashMap<String, Any>()
+            for (id in p.geocercas) gm[id] = true
+            ref.setValue(gm)
+        }
+    }
+
+    private fun borrarPunteroRemoto(id: String) {
+        database?.child("punteros")?.child(id)?.removeValue()
     }
 
     /** Convierte una geocerca al formato que se guarda en Firebase (lo mismo que lee la página web). */
@@ -294,6 +378,32 @@ class MainActivity : AppCompatActivity() {
         return lista
     }
 
+    private fun parsePunteros(snapshot: DataSnapshot): MutableList<Puntero> {
+        val lista = mutableListOf<Puntero>()
+        for (child in snapshot.children) {
+            val id = child.key ?: continue
+            // Sin "modo" es un resto sin configurar (por ejemplo una posición que llegó tarde): se ignora
+            val modoRaw = (child.child("modo").value as? String) ?: continue
+            val nombre = (child.child("nombre").value as? String) ?: "Puntero"
+            val color = (child.child("color").value as? String) ?: colorPara(lista.size)
+            val la = numero(child, "latitude")
+            val lo = numero(child, "longitude")
+            val asign = mutableSetOf<String>()
+            for (a in child.child("geocercas").children) {
+                val k = a.key
+                if (k != null) asign.add(k)
+            }
+            lista.add(
+                Puntero(
+                    id, nombre, color,
+                    if (modoRaw == "manual") "manual" else "gps",
+                    la ?: 0.0, lo ?: 0.0, la != null && lo != null, asign
+                )
+            )
+        }
+        return lista
+    }
+
     /** Las geocercas se comparten con la página web: cualquier cambio en Firebase llega aquí en vivo. */
     private fun escucharGeocercas() {
         val ref = database?.child("geocercas") ?: return
@@ -320,13 +430,203 @@ class MainActivity : AppCompatActivity() {
         geocercasListener = listener
     }
 
+    private fun firma(): String = punteros.joinToString(";") { p ->
+        p.id + "|" + p.nombre + "|" + p.color + "|" + p.modo + "|" +
+                p.geocercas.sorted().joinToString("+") +
+                (if (p.esManual) "|${p.lat},${p.lng},${p.tienePos}" else "")
+    }
+
+    /**
+     * Los punteros también se comparten con la página web. La posición de un puntero en modo GPS la manda
+     * este teléfono (por eso no se toma de Firebase); la de un puntero manual sí, porque la web la puede mover.
+     */
+    private fun escucharPunteros() {
+        val ref = database?.child("punteros") ?: return
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val remotos = parsePunteros(snapshot)
+                if (primeraSincPunteros && remotos.isEmpty() && punteros.isNotEmpty()) {
+                    // Firebase todavía no tiene punteros: se suben los de este teléfono
+                    primeraSincPunteros = false
+                    for (p in punteros) subirPuntero(p)
+                    return
+                }
+                primeraSincPunteros = false
+                val antes = firma()
+                val nuevos = mutableListOf<Puntero>()
+                val pasanAGps = mutableListOf<Puntero>()
+                for (r in remotos) {
+                    val local = punteros.firstOrNull { it.id == r.id }
+                    if (local == null) {
+                        if (r.esManual && r.tienePos) sembrar(r)
+                        nuevos.add(r)
+                    } else {
+                        val eraManual = local.esManual
+                        local.nombre = r.nombre
+                        local.color = r.color
+                        local.modo = r.modo
+                        local.geocercas.clear()
+                        local.geocercas.addAll(r.geocercas)
+                        if (local.esManual && r.tienePos) {
+                            local.lat = r.lat
+                            local.lng = r.lng
+                            local.tienePos = true
+                        }
+                        if (eraManual && !local.esManual) pasanAGps.add(local)
+                        nuevos.add(local)
+                    }
+                }
+                punteros.clear()
+                punteros.addAll(nuevos)
+                if (punteros.isEmpty()) {
+                    crearPunteroPorDefecto()
+                    for (p in punteros) subirPuntero(p)
+                }
+                if (punteros.none { it.id == seleccionadoId }) seleccionadoId = punteros.first().id
+                if (firma() != antes) {
+                    commitCambios()
+                    val g = ultimaGps
+                    if (g != null) {
+                        for (p in pasanAGps) actualizarPosicion(p, g.latitude(), g.longitude())
+                    }
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("Geocorez", "No se pudieron leer los punteros: ${error.message}")
+            }
+        }
+        ref.addValueEventListener(listener)
+        punterosListener = listener
+    }
+
+    // ---------------------------------------------------------------- punteros: lógica
+
+    private fun colorPara(i: Int): String = paleta[i % paleta.size]
+
+    private fun colorNuevo(): String =
+        paleta.firstOrNull { c -> punteros.none { it.color == c } } ?: colorPara(punteros.size)
+
+    private fun seleccionado(): Puntero? =
+        punteros.firstOrNull { it.id == seleccionadoId } ?: punteros.firstOrNull()
+
+    private fun hayPunteroGps(): Boolean = punteros.any { !it.esManual }
+
+    /** Puntero inicial: en modo GPS y con todas las geocercas que ya existían (así nada cambia para quien ya usaba la app). */
+    private fun crearPunteroPorDefecto() {
+        val p = Puntero(
+            nuevoId(), "Puntero ${punteros.size + 1}", colorNuevo(), "gps",
+            0.0, 0.0, false, geocercas.map { it.id }.toMutableSet()
+        )
+        punteros.add(p)
+        seleccionadoId = p.id
+    }
+
+    /** Punto único de entrada para cualquier posición nueva de un puntero (GPS o manual). */
+    private fun actualizarPosicion(p: Puntero, lat: Double, lng: Double) {
+        p.lat = lat
+        p.lng = lng
+        p.tienePos = true
+        val cambio = evaluarPuntero(p)
+        enviarUbicacion(p)
+        if (cambio) dibujarGeocercas()
+        dibujarPunteros()
+        actualizarUI()
+    }
+
+    /** Llega una lectura del GPS real: la reciben todos los punteros que estén en modo GPS. */
+    private fun recibirGps(lat: Double, lng: Double) {
+        ultimaGps = Point.fromLngLat(lng, lat)
+        for (p in punteros.filter { !it.esManual }) actualizarPosicion(p, lat, lng)
+    }
+
+    /** Cambia el modo de un puntero. Solo uno puede usar el GPS (el teléfono tiene un único GPS). */
+    private fun cambiarModo(p: Puntero, nuevo: String) {
+        if (p.modo == nuevo) return
+        val ref = database?.child("punteros")
+        p.modo = nuevo
+        ref?.child(p.id)?.child("modo")?.setValue(nuevo)
+        if (nuevo == "gps") {
+            for (o in punteros) {
+                if (o !== p && !o.esManual) {
+                    o.modo = "manual"
+                    ref?.child(o.id)?.child("modo")?.setValue("manual")
+                }
+            }
+            isFirstLocationUpdate = true
+            val g = ultimaGps
+            if (g != null) actualizarPosicion(p, g.latitude(), g.longitude())
+        }
+        guardarLocal()
+        actualizarPuck()
+        dibujarPunteros()
+        actualizarUI()
+        if (nuevo == "gps" && hasLocationPermission()) checkGpsStatus()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun actualizarPuck() {
+        if (mapReady) {
+            mapView.location.enabled = hayPunteroGps() && hasLocationPermission()
+        }
+    }
+
+    private fun sembrar(p: Puntero) {
+        // Marca silenciosamente dónde está ya el puntero (sin generar eventos de "entrada")
+        if (!p.tienePos) return
+        val set = dentroDe.getOrPut(p.id) { mutableSetOf() }
+        set.clear()
+        for (g in geocercas) {
+            if (p.geocercas.contains(g.id) && estaDentro(g, p.lat, p.lng)) set.add(g.id)
+        }
+    }
+
+    private fun actualizarUI() {
+        val sel = seleccionado()
+        if (sel == null) {
+            latitudeTextView.text = "Latitud: 0.000000"
+            longitudeTextView.text = "Longitud: 0.000000"
+            modeTextView.text = "Sin punteros"
+            geofenceStatusTextView.text = "Geocercas: ninguna"
+            pointersStatusTextView.visibility = View.GONE
+            return
+        }
+        if (sel.tienePos) {
+            latitudeTextView.text = "Latitud: %.6f".format(sel.lat)
+            longitudeTextView.text = "Longitud: %.6f".format(sel.lng)
+        } else {
+            latitudeTextView.text = "Latitud: 0.000000"
+            longitudeTextView.text = "Longitud: 0.000000"
+        }
+        modeTextView.text = sel.nombre + " · " + (if (sel.esManual) "Manual" else "GPS")
+        btnMode.text = if (sel.esManual) "Modo: MANUAL" else "Modo: GPS"
+
+        val asignadas = geocercas.filter { sel.geocercas.contains(it.id) }
+        val dentro = nombresDentro(sel)
+        geofenceStatusTextView.text = when {
+            geocercas.isEmpty() -> "Geocercas: ninguna"
+            asignadas.isEmpty() -> "Sin geocercas asignadas"
+            dentro.isEmpty() -> "Fuera de sus geocercas"
+            else -> "Dentro de: $dentro"
+        }
+
+        if (punteros.size > 1) {
+            pointersStatusTextView.visibility = View.VISIBLE
+            pointersStatusTextView.text = punteros.joinToString("\n") { p ->
+                val d = nombresDentro(p)
+                "• ${p.nombre}: " + (if (d.isEmpty()) "fuera" else d)
+            }
+        } else {
+            pointersStatusTextView.visibility = View.GONE
+        }
+    }
+
     // ---------------------------------------------------------------- ubicación
 
     private fun initializeLocationListener() {
         locationListener = LocationListener { location ->
-            if (manualMode) return@LocationListener
-            onNewPosition(location.latitude, location.longitude)
-            if (isFirstLocationUpdate && mapReady) {
+            recibirGps(location.latitude, location.longitude)
+            if (isFirstLocationUpdate && mapReady && hayPunteroGps()) {
                 moverCamara(Point.fromLngLat(location.longitude, location.latitude), 14.0)
                 isFirstLocationUpdate = false
             }
@@ -335,7 +635,6 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
-        if (manualMode) return
         val listener = locationListener ?: return
         stopLocationUpdates() // evita registrar el listener dos veces
         try {
@@ -360,15 +659,6 @@ class MainActivity : AppCompatActivity() {
         if (::locationManager.isInitialized && listener != null) {
             locationManager.removeUpdates(listener)
         }
-    }
-
-    /** Punto único de entrada para cualquier posición nueva (GPS o manual). */
-    private fun onNewPosition(lat: Double, lng: Double) {
-        currentPoint = Point.fromLngLat(lng, lat)
-        latitudeTextView.text = "Latitud: %.6f".format(lat)
-        longitudeTextView.text = "Longitud: %.6f".format(lng)
-        evaluarGeocercas(lat, lng)
-        enviarUbicacion(lat, lng)
     }
 
     private fun moverCamara(point: Point, zoom: Double) {
@@ -409,7 +699,8 @@ class MainActivity : AppCompatActivity() {
                     bearingImage = pointerImageHolder
                 )
             }
-            locationComponentPlugin.enabled = !manualMode
+            // El icono del GPS real se muestra mientras algún puntero esté en modo GPS
+            locationComponentPlugin.enabled = hayPunteroGps() && hasLocationPermission()
 
             // Capas de anotaciones (el orden de creación es el orden de apilado)
             val annotationApi = mapView.annotations
@@ -418,8 +709,10 @@ class MainActivity : AppCompatActivity() {
             labelManager = annotationApi.createPointAnnotationManager()
             drawLineManager = annotationApi.createPolylineAnnotationManager()
             drawDotManager = annotationApi.createCircleAnnotationManager()
-            circleManager = annotationApi.createCircleAnnotationManager()
+            pointerCircleManager = annotationApi.createCircleAnnotationManager()
+            pointerLabelManager = annotationApi.createPointAnnotationManager()
             dibujarGeocercas()
+            dibujarPunteros()
 
             // Última ubicación conocida (protegido: con permiso "aproximado" el GPS lanza excepción)
             try {
@@ -431,14 +724,20 @@ class MainActivity : AppCompatActivity() {
                     lastLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
                 }
                 if (lastLocation != null) {
-                    if (isFirstLocationUpdate) {
+                    if (isFirstLocationUpdate && hayPunteroGps()) {
                         moverCamara(Point.fromLngLat(lastLocation.longitude, lastLocation.latitude), 14.0)
                         isFirstLocationUpdate = false
                     }
-                    onNewPosition(lastLocation.latitude, lastLocation.longitude)
+                    recibirGps(lastLocation.latitude, lastLocation.longitude)
                 }
             } catch (e: SecurityException) {
                 e.printStackTrace()
+            }
+
+            // Sin ningún puntero en GPS, la vista arranca sobre el puntero seleccionado
+            if (!hayPunteroGps()) {
+                val s = seleccionado()
+                if (s != null && s.tienePos) moverCamara(Point.fromLngLat(s.lng, s.lat), 14.0)
             }
 
             startLocationUpdates()
@@ -446,15 +745,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupMapGestures() {
-        // Toque corto: agrega un punto al dibujar, o mueve mi ubicación en modo manual
+        // Toque corto: agrega un punto al dibujar, o mueve el puntero seleccionado si está en modo manual
         mapView.gestures.addOnMapClickListener(object : OnMapClickListener {
             override fun onMapClick(point: Point): Boolean {
                 if (drawing) {
                     agregarVertice(point)
                     return true
                 }
-                if (manualMode) {
-                    setManualPosition(point)
+                val sel = seleccionado()
+                if (sel != null && sel.esManual) {
+                    actualizarPosicion(sel, point.latitude(), point.longitude())
+                    guardarLocal()
                     return true
                 }
                 return false
@@ -472,14 +773,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupButtons() {
         findViewById<View>(R.id.btnCenter).setOnClickListener {
-            val p = currentPoint
-            if (p != null) moverCamara(p, 16.0) else toast("Aún no hay ubicación")
+            val p = seleccionado()
+            if (p != null && p.tienePos) moverCamara(Point.fromLngLat(p.lng, p.lat), 16.0)
+            else toast("Aún no hay ubicación")
         }
         btnMode.setOnClickListener { alternarModo() }
+        findViewById<View>(R.id.btnPointers).setOnClickListener { showListaPunteros() }
         findViewById<View>(R.id.btnAddGeofence).setOnClickListener {
-            val p = currentPoint
-            if (p != null) {
-                showGeocercaDialog(null, p)
+            val p = seleccionado()
+            if (p != null && p.tienePos) {
+                showGeocercaDialog(null, Point.fromLngLat(p.lng, p.lat))
             } else {
                 toast("Aún no hay ubicación. También puedes mantener presionado el mapa.")
             }
@@ -491,46 +794,20 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnDrawCancel).setOnClickListener { cancelarDibujo() }
     }
 
-    // ---------------------------------------------------------------- modo manual
+    // ---------------------------------------------------------------- modo del puntero seleccionado
 
-    @SuppressLint("MissingPermission")
     private fun alternarModo() {
         if (!mapReady) {
             toast("El mapa aún se está cargando")
             return
         }
-        if (!manualMode) {
-            manualMode = true
-            stopLocationUpdates()
-            mapView.location.enabled = false
-            btnMode.text = "Modo: MANUAL"
-            modeTextView.text = "Ubicación manual"
-            toast("Toca el mapa para mover tu ubicación")
-            currentPoint?.let { setManualPosition(it) }
+        val p = seleccionado() ?: return
+        if (!p.esManual) {
+            cambiarModo(p, "manual")
+            toast("Toca el mapa para mover a ${p.nombre}")
         } else {
-            manualMode = false
-            circleManager?.deleteAll()
-            mapView.location.enabled = true
-            btnMode.text = "Modo: GPS"
-            modeTextView.text = "Ubicación por GPS"
-            isFirstLocationUpdate = true
-            if (hasLocationPermission()) checkGpsStatus()
+            cambiarModo(p, "gps")
         }
-    }
-
-    private fun setManualPosition(point: Point) {
-        circleManager?.let { cm ->
-            cm.deleteAll()
-            cm.create(
-                CircleAnnotationOptions()
-                    .withPoint(point)
-                    .withCircleRadius(9.0)
-                    .withCircleColor("#FF9800")
-                    .withCircleStrokeWidth(3.0)
-                    .withCircleStrokeColor("#FFFFFF")
-            )
-        }
-        onNewPosition(point.latitude(), point.longitude())
     }
 
     // ---------------------------------------------------------------- geocercas: lógica
@@ -569,44 +846,87 @@ class MainActivity : AppCompatActivity() {
         return result[0] <= g.radio
     }
 
-    private fun evaluarGeocercas(lat: Double, lng: Double) {
-        dentroDe.retainAll(geocercas.map { it.id }.toSet())
-        var cambio = false
-        for (g in geocercas) {
-            val dentro = estaDentro(g, lat, lng)
-            val estabaDentro = dentroDe.contains(g.id)
-            if (dentro && !estabaDentro) {
-                dentroDe.add(g.id)
-                cambio = true
-                registrarEvento(g, true)
-            } else if (!dentro && estabaDentro) {
-                dentroDe.remove(g.id)
-                cambio = true
-                registrarEvento(g, false)
+    /**
+     * Un punto que de verdad esté dentro de la geocerca. En un círculo es el centro; en una zona libre es
+     * el centro aproximado, y si ese centro cae fuera (zona con forma cóncava) se busca el punto interior más cercano.
+     */
+    private fun puntoInterior(g: Geocerca): Point {
+        if (!g.esPoligono) return Point.fromLngLat(g.lng, g.lat)
+        if (puntoEnPoligono(g.lat, g.lng, g.puntos)) return Point.fromLngLat(g.lng, g.lat)
+        var minLa = Double.MAX_VALUE
+        var maxLa = -Double.MAX_VALUE
+        var minLo = Double.MAX_VALUE
+        var maxLo = -Double.MAX_VALUE
+        for (p in g.puntos) {
+            if (p.latitude() < minLa) minLa = p.latitude()
+            if (p.latitude() > maxLa) maxLa = p.latitude()
+            if (p.longitude() < minLo) minLo = p.longitude()
+            if (p.longitude() > maxLo) maxLo = p.longitude()
+        }
+        val n = 30
+        var mejor: Point? = null
+        var mejorD = Double.MAX_VALUE
+        for (i in 0..n) {
+            for (j in 0..n) {
+                val la = minLa + (maxLa - minLa) * i / n
+                val lo = minLo + (maxLo - minLo) * j / n
+                if (puntoEnPoligono(la, lo, g.puntos)) {
+                    val d = (la - g.lat) * (la - g.lat) + (lo - g.lng) * (lo - g.lng)
+                    if (d < mejorD) {
+                        mejorD = d
+                        mejor = Point.fromLngLat(lo, la)
+                    }
+                }
             }
         }
-        actualizarEstadoGeocercas()
-        if (cambio) dibujarGeocercas()
+        return mejor ?: g.puntos.first()
     }
 
-    private fun registrarEvento(g: Geocerca, entrada: Boolean) {
-        toast(if (entrada) "Entraste a \"${g.nombre}\"" else "Saliste de \"${g.nombre}\"")
+    /**
+     * Evalúa solo las geocercas asignadas a este puntero. Devuelve true si entró o salió de alguna.
+     */
+    private fun evaluarPuntero(p: Puntero): Boolean {
+        if (!p.tienePos) return false
+        val set = dentroDe.getOrPut(p.id) { mutableSetOf() }
+        var cambio = false
+        val validas = geocercas.filter { p.geocercas.contains(it.id) }
+        // Geocercas que ya no existen o que se le quitaron al puntero
+        if (set.retainAll(validas.map { it.id }.toSet())) cambio = true
+        for (g in validas) {
+            val dentro = estaDentro(g, p.lat, p.lng)
+            val estabaDentro = set.contains(g.id)
+            if (dentro && !estabaDentro) {
+                set.add(g.id)
+                cambio = true
+                registrarEvento(p, g, true)
+            } else if (!dentro && estabaDentro) {
+                set.remove(g.id)
+                cambio = true
+                registrarEvento(p, g, false)
+            }
+        }
+        return cambio
+    }
+
+    private fun evaluarTodos() {
+        dentroDe.keys.retainAll(punteros.map { it.id }.toSet())
+        for (p in punteros) {
+            if (evaluarPuntero(p)) actualizarGeocercaRemota(p)
+        }
+    }
+
+    private fun registrarEvento(p: Puntero, g: Geocerca, entrada: Boolean) {
+        toast(
+            if (entrada) "${p.nombre} entró a \"${g.nombre}\""
+            else "${p.nombre} salió de \"${g.nombre}\""
+        )
         val evento = mapOf(
+            "puntero" to p.nombre,
             "geocerca" to g.nombre,
             "evento" to (if (entrada) "entrada" else "salida"),
             "timestamp" to System.currentTimeMillis()
         )
         database?.child("eventos")?.push()?.setValue(evento)
-    }
-
-    private fun actualizarEstadoGeocercas() {
-        geofenceStatusTextView.text = when {
-            geocercas.isEmpty() -> "Geocercas: ninguna"
-            dentroDe.isEmpty() -> "Fuera de las geocercas"
-            else -> "Dentro de: " + geocercas
-                .filter { dentroDe.contains(it.id) }
-                .joinToString(", ") { it.nombre }
-        }
     }
 
     private fun guardarLocal() {
@@ -631,9 +951,26 @@ class MainActivity : AppCompatActivity() {
             }
             arr.put(o)
         }
+        val parr = JSONArray()
+        for (p in punteros) {
+            val o = JSONObject()
+            o.put("id", p.id)
+            o.put("nombre", p.nombre)
+            o.put("color", p.color)
+            o.put("modo", p.modo)
+            o.put("lat", p.lat)
+            o.put("lng", p.lng)
+            o.put("tienePos", p.tienePos)
+            val ga = JSONArray()
+            for (id in p.geocercas) ga.put(id)
+            o.put("geocercas", ga)
+            parr.put(o)
+        }
         getSharedPreferences("geocorez_prefs", MODE_PRIVATE)
             .edit()
             .putString("geocercas", arr.toString())
+            .putString("punteros", parr.toString())
+            .putString("seleccionado", seleccionadoId)
             .apply()
     }
 
@@ -671,21 +1008,58 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Guarda en el teléfono, vuelve a evaluar dónde estoy y redibuja. */
+    private fun cargarPunteros() {
+        val prefs = getSharedPreferences("geocorez_prefs", MODE_PRIVATE)
+        val json = prefs.getString("punteros", null)
+        if (json != null) {
+            try {
+                val arr = JSONArray(json)
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    val manual = o.optString("modo", "gps") == "manual"
+                    val asign = mutableSetOf<String>()
+                    val ga = o.optJSONArray("geocercas")
+                    if (ga != null) {
+                        for (k in 0 until ga.length()) asign.add(ga.getString(k))
+                    }
+                    punteros.add(
+                        Puntero(
+                            o.getString("id"),
+                            o.optString("nombre", "Puntero"),
+                            o.optString("color", colorPara(i)),
+                            if (manual) "manual" else "gps",
+                            o.optDouble("lat", 0.0),
+                            o.optDouble("lng", 0.0),
+                            manual && o.optBoolean("tienePos", false), // la posición GPS guardada ya no sirve
+                            asign
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("Geocorez", "No se pudieron leer los punteros guardados", e)
+            }
+        }
+        if (punteros.isEmpty()) crearPunteroPorDefecto()
+        seleccionadoId = prefs.getString("seleccionado", null)
+        if (punteros.none { it.id == seleccionadoId }) seleccionadoId = punteros.first().id
+        for (p in punteros) {
+            if (p.esManual && p.tienePos) sembrar(p)
+        }
+    }
+
+    /** Guarda en el teléfono, vuelve a evaluar dónde está cada puntero y redibuja. */
     private fun commitCambios() {
         guardarLocal()
-        val p = currentPoint
-        if (p != null) {
-            evaluarGeocercas(p.latitude(), p.longitude())
-        } else {
-            actualizarEstadoGeocercas()
-        }
+        evaluarTodos()
+        actualizarPuck()
         dibujarGeocercas()
+        dibujarPunteros()
+        actualizarUI()
     }
 
     private fun nuevoId(): String = UUID.randomUUID().toString().substring(0, 8)
 
-    // ---------------------------------------------------------------- geocercas: dibujo en el mapa
+    // ---------------------------------------------------------------- dibujo en el mapa
 
     private fun dibujarGeocercas() {
         val pm = polygonManager ?: return
@@ -695,7 +1069,9 @@ class MainActivity : AppCompatActivity() {
         lm.deleteAll()
         fm.deleteAll()
         for (g in geocercas) {
-            val color = if (dentroDe.contains(g.id)) "#35B82A" else "#1E9BE8"
+            // Verde si cualquier puntero asignado está dentro
+            val algunoDentro = dentroDe.values.any { it.contains(g.id) }
+            val color = if (algunoDentro) "#35B82A" else "#1E9BE8"
             val anillo: List<Point> = if (g.esPoligono) {
                 g.puntos + g.puntos.first()
             } else {
@@ -722,6 +1098,43 @@ class MainActivity : AppCompatActivity() {
                     .withTextColor(color)
                     .withTextHaloColor("#FFFFFF")
                     .withTextHaloWidth(2.0)
+            )
+        }
+    }
+
+    /**
+     * Dibuja los punteros. Los manuales son un círculo del color del puntero; el que está en modo GPS
+     * usa el icono personalizado del GPS real y aquí solo lleva su nombre. El seleccionado se ve más grande y con "»".
+     */
+    private fun dibujarPunteros() {
+        val cm = pointerCircleManager ?: return
+        val tm = pointerLabelManager ?: return
+        cm.deleteAll()
+        tm.deleteAll()
+        val selId = seleccionado()?.id
+        for (p in punteros) {
+            if (!p.tienePos) continue
+            val pt = Point.fromLngLat(p.lng, p.lat)
+            val esSel = p.id == selId
+            if (p.esManual) {
+                cm.create(
+                    CircleAnnotationOptions()
+                        .withPoint(pt)
+                        .withCircleRadius(if (esSel) 11.0 else 8.0)
+                        .withCircleColor(p.color)
+                        .withCircleStrokeWidth(3.0)
+                        .withCircleStrokeColor("#FFFFFF")
+                )
+            }
+            tm.create(
+                PointAnnotationOptions()
+                    .withPoint(pt)
+                    .withTextField((if (esSel) "» " else "") + p.nombre)
+                    .withTextSize(12.0)
+                    .withTextColor(p.color)
+                    .withTextHaloColor("#FFFFFF")
+                    .withTextHaloWidth(2.0)
+                    .withTextOffset(listOf(0.0, if (p.esManual) -1.8 else -3.2))
             )
         }
     }
@@ -830,6 +1243,7 @@ class MainActivity : AppCompatActivity() {
      *  - existing != null: edita (círculo: nombre y radio; polígono: solo nombre).
      *  - puntosNuevos != null: guarda una zona dibujada.
      *  - point != null: crea un círculo en ese punto.
+     * En todos los casos se eligen qué punteros la evalúan (relación muchos a muchos).
      */
     private fun showGeocercaDialog(existing: Geocerca?, point: Point?, puntosNuevos: List<Point>? = null) {
         val esPoligono = (existing != null && existing.esPoligono) || puntosNuevos != null
@@ -850,6 +1264,25 @@ class MainActivity : AppCompatActivity() {
         radiusInput.setText((existing?.radio ?: 100.0).toInt().toString())
         if (!esPoligono) container.addView(radiusInput)
 
+        // Punteros que evalúan esta geocerca
+        val checks = ArrayList<Pair<Puntero, CheckBox>>()
+        if (punteros.isNotEmpty()) {
+            val tv = TextView(this)
+            tv.text = "Punteros que la evalúan:"
+            tv.setPadding(0, pad / 2, 0, 0)
+            container.addView(tv)
+            val selId = seleccionado()?.id
+            for (pt in punteros) {
+                val cb = CheckBox(this)
+                cb.text = pt.nombre
+                cb.isChecked = if (existing != null) pt.geocercas.contains(existing.id) else pt.id == selId
+                container.addView(cb)
+                checks.add(Pair(pt, cb))
+            }
+        }
+        val scroll = ScrollView(this)
+        scroll.addView(container)
+
         val titulo = when {
             existing != null -> "Editar geocerca"
             puntosNuevos != null -> "Nueva zona"
@@ -858,16 +1291,18 @@ class MainActivity : AppCompatActivity() {
 
         AlertDialog.Builder(this, R.style.GeocorezDialog)
             .setTitle(titulo)
-            .setView(container)
+            .setView(scroll)
             .setPositiveButton("Guardar") { _, _ ->
                 val nombre = nameInput.text.toString().trim()
                     .ifEmpty { "Geocerca ${geocercas.size + 1}" }
                 val radio = (radiusInput.text.toString().toDoubleOrNull() ?: 100.0)
                     .coerceIn(10.0, 100000.0)
+                var destino: Geocerca? = null
                 if (existing != null) {
                     existing.nombre = nombre
                     if (!existing.esPoligono) existing.radio = radio
                     subirGeocerca(existing)
+                    destino = existing
                 } else if (puntosNuevos != null) {
                     val c = centroide(puntosNuevos)
                     val g = Geocerca(
@@ -876,12 +1311,26 @@ class MainActivity : AppCompatActivity() {
                     geocercas.add(g)
                     subirGeocerca(g)
                     finalizarDibujo()
+                    destino = g
                 } else if (point != null) {
                     val g = Geocerca(
                         nuevoId(), nombre, "circulo", point.latitude(), point.longitude(), radio, mutableListOf()
                     )
                     geocercas.add(g)
                     subirGeocerca(g)
+                    destino = g
+                }
+                if (destino != null) {
+                    for ((pt, cb) in checks) {
+                        val tenia = pt.geocercas.contains(destino.id)
+                        if (cb.isChecked && !tenia) {
+                            pt.geocercas.add(destino.id)
+                            subirAsignaciones(pt)
+                        } else if (!cb.isChecked && tenia) {
+                            pt.geocercas.remove(destino.id)
+                            subirAsignaciones(pt)
+                        }
+                    }
                 }
                 commitCambios()
             }
@@ -894,13 +1343,16 @@ class MainActivity : AppCompatActivity() {
             toast("No hay geocercas. Usa \"+ Círculo\", \"Dibujar zona\" o mantén presionado el mapa.")
             return
         }
-        val items = geocercas.map {
-            val estado = if (dentroDe.contains(it.id)) "  (dentro)" else ""
-            if (it.esPoligono) {
-                "${it.nombre} - zona libre (${it.puntos.size} puntos)$estado"
+        val items = geocercas.map { g ->
+            val estado = if (dentroDe.values.any { s -> s.contains(g.id) }) "  (dentro)" else ""
+            val asignados = punteros.filter { p -> p.geocercas.contains(g.id) }
+            val quienes = if (asignados.isEmpty()) "sin punteros" else asignados.joinToString(", ") { p -> p.nombre }
+            val detalle = if (g.esPoligono) {
+                "${g.nombre} - zona libre (${g.puntos.size} puntos)$estado"
             } else {
-                "${it.nombre} - ${it.radio.toInt()} m$estado"
+                "${g.nombre} - ${g.radio.toInt()} m$estado"
             }
+            "$detalle\n→ $quienes"
         }.toTypedArray()
 
         AlertDialog.Builder(this, R.style.GeocorezDialog)
@@ -912,21 +1364,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun showAccionesGeocerca(g: Geocerca) {
         val opciones = if (g.esPoligono) {
-            arrayOf("Ir a la geocerca", "Renombrar", "Eliminar")
+            arrayOf("Ir a la geocerca", "Renombrar / punteros", "Eliminar")
         } else {
-            arrayOf("Ir a la geocerca", "Editar nombre y radio", "Mover a mi ubicación actual", "Eliminar")
+            arrayOf(
+                "Ir a la geocerca", "Editar nombre, radio y punteros",
+                "Mover a la posición del puntero", "Eliminar"
+            )
         }
         AlertDialog.Builder(this, R.style.GeocorezDialog)
             .setTitle(g.nombre)
             .setItems(opciones) { _, which ->
                 when (opciones[which]) {
-                    "Ir a la geocerca" -> moverCamara(Point.fromLngLat(g.lng, g.lat), 16.0)
-                    "Renombrar", "Editar nombre y radio" -> showGeocercaDialog(g, null)
-                    "Mover a mi ubicación actual" -> {
-                        val p = currentPoint
-                        if (p != null) {
-                            g.lat = p.latitude()
-                            g.lng = p.longitude()
+                    "Ir a la geocerca" -> irAGeocerca(g)
+                    "Renombrar / punteros", "Editar nombre, radio y punteros" -> showGeocercaDialog(g, null)
+                    "Mover a la posición del puntero" -> {
+                        val p = seleccionado()
+                        if (p != null && p.tienePos) {
+                            g.lat = p.lat
+                            g.lng = p.lng
                             subirGeocerca(g)
                             commitCambios()
                         } else {
@@ -940,14 +1395,185 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    /** Puntero que debe ir a la geocerca: el seleccionado si la tiene asignada, si no el primero que la tenga. */
+    private fun punteroParaIr(g: Geocerca): Puntero? {
+        val sel = seleccionado()
+        if (sel != null && sel.geocercas.contains(g.id)) return sel
+        return punteros.firstOrNull { it.geocercas.contains(g.id) } ?: sel
+    }
+
+    /**
+     * "Ir a la geocerca": además de la cámara, el puntero también va a la geocerca.
+     * El GPS real no se puede mover, así que si el puntero estaba en modo GPS pasa a modo manual.
+     */
+    private fun irAGeocerca(g: Geocerca) {
+        val destino = puntoInterior(g)
+        val p = punteroParaIr(g)
+        if (p != null) {
+            seleccionadoId = p.id
+            if (!p.esManual) cambiarModo(p, "manual")
+            actualizarPosicion(p, destino.latitude(), destino.longitude())
+            guardarLocal()
+            if (p.geocercas.contains(g.id)) {
+                toast("${p.nombre} fue a \"${g.nombre}\"")
+            } else {
+                toast("${p.nombre} fue a \"${g.nombre}\" (no la tiene asignada)")
+            }
+        }
+        moverCamara(destino, 16.0)
+    }
+
     private fun confirmarEliminar(g: Geocerca) {
         AlertDialog.Builder(this, R.style.GeocorezDialog)
             .setTitle("Eliminar geocerca")
             .setMessage("¿Eliminar \"${g.nombre}\"?")
             .setPositiveButton("Eliminar") { _, _ ->
                 geocercas.remove(g)
-                dentroDe.remove(g.id)
+                for (s in dentroDe.values) s.remove(g.id)
+                for (p in punteros) {
+                    if (p.geocercas.remove(g.id)) {
+                        database?.child("punteros")?.child(p.id)?.child("geocercas")?.child(g.id)?.removeValue()
+                    }
+                }
                 borrarGeocercaRemota(g.id)
+                commitCambios()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    // ---------------------------------------------------------------- punteros: diálogos
+
+    /** Crea o edita un puntero: nombre y qué geocercas evalúa. */
+    private fun showPunteroDialog(existing: Puntero?) {
+        if (existing == null && !mapReady) {
+            toast("El mapa aún se está cargando")
+            return
+        }
+        val pad = (24 * resources.displayMetrics.density).toInt()
+        val container = LinearLayout(this)
+        container.orientation = LinearLayout.VERTICAL
+        container.setPadding(pad, pad / 2, pad, 0)
+
+        val nameInput = EditText(this)
+        nameInput.hint = "Nombre del puntero"
+        nameInput.inputType = InputType.TYPE_CLASS_TEXT
+        nameInput.setText(existing?.nombre ?: "Puntero ${punteros.size + 1}")
+        container.addView(nameInput)
+
+        val checks = ArrayList<Pair<Geocerca, CheckBox>>()
+        if (geocercas.isNotEmpty()) {
+            val tv = TextView(this)
+            tv.text = "Geocercas que evalúa este puntero:"
+            tv.setPadding(0, pad / 2, 0, 0)
+            container.addView(tv)
+            for (g in geocercas) {
+                val cb = CheckBox(this)
+                cb.text = g.nombre
+                cb.isChecked = existing?.geocercas?.contains(g.id) ?: false
+                container.addView(cb)
+                checks.add(Pair(g, cb))
+            }
+        }
+        val scroll = ScrollView(this)
+        scroll.addView(container)
+
+        AlertDialog.Builder(this, R.style.GeocorezDialog)
+            .setTitle(if (existing != null) "Editar puntero" else "Nuevo puntero")
+            .setView(scroll)
+            .setPositiveButton("Guardar") { _, _ ->
+                val nombre = nameInput.text.toString().trim()
+                    .ifEmpty { "Puntero ${punteros.size + 1}" }
+                val elegidas = checks.filter { it.second.isChecked }.map { it.first.id }
+                if (existing != null) {
+                    existing.nombre = nombre
+                    existing.geocercas.clear()
+                    existing.geocercas.addAll(elegidas)
+                    subirPuntero(existing)
+                } else {
+                    // El puntero nuevo aparece en el centro del mapa, en modo manual
+                    val centro = mapView.getMapboxMap().cameraState.center
+                    val p = Puntero(
+                        nuevoId(), nombre, colorNuevo(), "manual",
+                        centro.latitude(), centro.longitude(), true, elegidas.toMutableSet()
+                    )
+                    punteros.add(p)
+                    seleccionadoId = p.id
+                    subirPuntero(p)
+                }
+                commitCambios()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun showListaPunteros() {
+        val items = punteros.map { p ->
+            val marca = if (p.id == seleccionado()?.id) "▶ " else ""
+            val modo = if (p.esManual) "Manual" else "GPS"
+            val n = p.geocercas.count { id -> geocercas.any { it.id == id } }
+            val d = nombresDentro(p)
+            val dentro = if (d.isEmpty()) "" else "\n   Dentro de: $d"
+            "$marca${p.nombre} · $modo · $n geocerca(s)$dentro"
+        }.toTypedArray()
+
+        AlertDialog.Builder(this, R.style.GeocorezDialog)
+            .setTitle("Punteros")
+            .setItems(items) { _, which -> showAccionesPuntero(punteros[which]) }
+            .setPositiveButton("+ Nuevo") { _, _ -> showPunteroDialog(null) }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
+    private fun seleccionarPuntero(p: Puntero, centrar: Boolean) {
+        seleccionadoId = p.id
+        guardarLocal()
+        dibujarPunteros()
+        actualizarUI()
+        if (centrar && p.tienePos && mapReady) moverCamara(Point.fromLngLat(p.lng, p.lat), 16.0)
+    }
+
+    private fun showAccionesPuntero(p: Puntero) {
+        val esSel = p.id == seleccionado()?.id
+        val opciones = mutableListOf<String>()
+        if (!esSel) opciones.add("Seleccionar")
+        opciones.add("Ir al puntero")
+        opciones.add("Editar nombre y geocercas")
+        opciones.add(if (p.esManual) "Cambiar a modo GPS" else "Cambiar a modo manual")
+        if (punteros.size > 1) opciones.add("Eliminar")
+
+        AlertDialog.Builder(this, R.style.GeocorezDialog)
+            .setTitle(p.nombre)
+            .setItems(opciones.toTypedArray()) { _, which ->
+                when (opciones[which]) {
+                    "Seleccionar" -> seleccionarPuntero(p, false)
+                    "Ir al puntero" -> seleccionarPuntero(p, true)
+                    "Editar nombre y geocercas" -> showPunteroDialog(p)
+                    "Cambiar a modo GPS" -> {
+                        seleccionarPuntero(p, false)
+                        cambiarModo(p, "gps")
+                    }
+                    "Cambiar a modo manual" -> {
+                        seleccionarPuntero(p, false)
+                        cambiarModo(p, "manual")
+                        toast("Toca el mapa para mover a ${p.nombre}")
+                    }
+                    "Eliminar" -> confirmarEliminarPuntero(p)
+                }
+            }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
+    private fun confirmarEliminarPuntero(p: Puntero) {
+        AlertDialog.Builder(this, R.style.GeocorezDialog)
+            .setTitle("Eliminar puntero")
+            .setMessage("¿Eliminar \"${p.nombre}\"? Las geocercas no se borran.")
+            .setPositiveButton("Eliminar") { _, _ ->
+                punteros.remove(p)
+                dentroDe.remove(p.id)
+                borrarPunteroRemoto(p.id)
+                if (seleccionadoId == p.id) seleccionadoId = punteros.firstOrNull()?.id
                 commitCambios()
             }
             .setNegativeButton("Cancelar", null)
@@ -970,7 +1596,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkGpsStatus() {
-        if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+        // El GPS solo es obligatorio mientras algún puntero lo use
+        if (hayPunteroGps() && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
             showGpsDisabledDialog()
         } else {
             gpsDialog?.dismiss()

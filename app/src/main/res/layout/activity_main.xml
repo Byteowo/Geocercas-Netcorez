@@ -55,11 +55,12 @@
                         android:textStyle="bold"
                         android:fontFamily="sans-serif-medium" />
 
+                <!-- Puntero seleccionado y su modo -->
                 <TextView
                         android:id="@+id/modeTextView"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Ubicación por GPS"
+                        android:text="Puntero 1 · GPS"
                         android:textColor="@color/aero_text_soft"
                         android:textSize="11sp" />
             </LinearLayout>
@@ -100,6 +101,7 @@
                 android:textColor="#FFFFFF"
                 android:textSize="13sp" />
 
+        <!-- Modo del puntero seleccionado (GPS / manual) -->
         <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/btnMode"
                 style="@style/Widget.AppCompat.Button"
@@ -119,6 +121,30 @@
                 android:shadowDy="1"
                 android:shadowRadius="2"
                 android:text="Modo: GPS"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp" />
+
+        <!-- Lista de punteros: seleccionar, crear, editar y asignar geocercas -->
+        <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btnPointers"
+                style="@style/Widget.AppCompat.Button"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:layout_marginBottom="8dp"
+                android:minWidth="130dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:background="@drawable/bg_aero_btn_aqua"
+                app:backgroundTint="@null"
+                android:elevation="4dp"
+                android:stateListAnimator="@null"
+                android:fontFamily="sans-serif-medium"
+                android:shadowColor="#99004A73"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="2"
+                android:text="Punteros"
                 android:textAllCaps="false"
                 android:textColor="#FFFFFF"
                 android:textSize="13sp" />
@@ -244,9 +270,22 @@
                     android:id="@+id/geofenceStatusTextView"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:maxWidth="260dp"
                     android:text="Geocercas: ninguna"
                     android:textColor="@color/aero_text_soft"
                     android:textSize="13sp" />
+
+            <!-- Resumen de todos los punteros (solo se ve si hay más de uno) -->
+            <TextView
+                    android:id="@+id/pointersStatusTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:maxWidth="260dp"
+                    android:visibility="gone"
+                    android:text=""
+                    android:textColor="@color/aero_text_soft"
+                    android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
 
